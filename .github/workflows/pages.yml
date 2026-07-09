@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main, master, claude/score-study-app-ds2il9]
+    paths-ignore:
+      - 'data/**'   # study-data sync commits don't need a redeploy
   workflow_dispatch:
 
 permissions:

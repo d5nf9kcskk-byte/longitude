@@ -384,8 +384,10 @@ const Views = {
         <p class="dim small">Data lives in this browser's local storage. Export regularly, or set up GitHub sync below to move between devices.</p>
       </div>
       <div class="card">
-        <div class="card-kicker">GitHub sync (optional)</div>
-        <p class="dim small">Stores your data as a JSON file in a GitHub repo, so any device can push/pull it. Create a <b>fine-grained personal access token</b> with <em>Contents: read & write</em> on just that repo. The token is kept only in this browser.</p>
+        <div class="card-kicker">GitHub sync — your data follows you between devices</div>
+        <p class="dim small">Your study data is saved as a JSON file in your repo. With auto-sync on, the app loads the newest copy when you open it and quietly pushes changes a few seconds after you make them — do the one-time token setup below on each device and it just follows you.</p>
+        <p class="dim small"><b>One-time setup:</b> ① Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> → ② Name it "score study sync", set expiration (350 days max) → ③ Repository access: <em>Only select repositories</em> → choose <b>${esc(gh.repo || 'longitude')}</b> → ④ Permissions → Repository permissions → <b>Contents: Read and write</b> → ⑤ Generate, copy the <code>github_pat_…</code> value, and paste it in the Token box here. Repeat the paste on each device you use. The token itself never leaves this browser and is never written into backups or the synced file.</p>
+        <label class="check-row"><input type="checkbox" data-gh="autoSync" ${gh.autoSync ? 'checked' : ''}><span><b>Auto-sync</b> — pull newest on open, push changes automatically</span></label>
         <div class="grid-2">
           <label class="field">Owner<input class="input" value="${esc(gh.owner)}" data-gh="owner" placeholder="your-username"></label>
           <label class="field">Repo<input class="input" value="${esc(gh.repo)}" data-gh="repo" placeholder="longitude"></label>
@@ -394,10 +396,11 @@ const Views = {
         </div>
         <label class="field">Token<input class="input" type="password" value="${esc(gh.token)}" data-gh="token" placeholder="github_pat_…"></label>
         <div class="btn-row">
-          <button class="btn primary" data-action="gh-push">Push to GitHub</button>
-          <button class="btn" data-action="gh-pull">Pull from GitHub</button>
+          <button class="btn primary" data-action="gh-push">Push now</button>
+          <button class="btn" data-action="gh-pull">Pull now (replace local)</button>
         </div>
         <div id="gh-status" class="dim small"></div>
+        <p class="dim small">Note: if the repo is public, the synced study data file is public too (it contains work titles, passage names, and your notes — never the token).</p>
       </div>
       <div class="card">
         <div class="card-kicker">Starter</div>

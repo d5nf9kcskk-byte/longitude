@@ -1,3 +1,12 @@
+# Longitude
+
+This repo hosts the **Longitude** app collection. The root landing page is `index.html`; each app lives in its own folder so they never collide:
+
+- **`score-study/`** — 🎼 Score Study (below)
+- *(root)* — reserved for the Longitude app itself
+
+---
+
 # 🎼 Score Study
 
 A browser-based coach for learning musical scores as efficiently as possible — built by adapting Justin Sung's learning-science framework (encoding-first study, PACER information types, priming, generative effort, deadline-aware spaced recall) to the specific realities of score study.
@@ -31,21 +40,21 @@ Retrieval practice (flashcards, spaced repetition) is a *check*, not the engine 
 
 ## Running it
 
-It's a static site — open `index.html` in a browser, or serve the folder:
+It's a static site — open `score-study/index.html` in a browser, or serve the repo root:
 
 ```bash
-python3 -m http.server 8000   # then open http://localhost:8000
+python3 -m http.server 8000   # then open http://localhost:8000/score-study/
 ```
 
 ### GitHub Pages (recommended)
 
-A workflow (`.github/workflows/pages.yml`) deploys the app on every push. One-time setup: in the repo's **Settings → Pages**, set **Source** to **GitHub Actions** (the workflow also attempts to enable this automatically on first run). Your app then lives at `https://<user>.github.io/<repo>/`.
+A workflow (`.github/workflows/pages.yml`) deploys the whole repo on every push (data-sync commits under `data/` are ignored). One-time setup: in the repo's **Settings → Pages**, set **Source** to **GitHub Actions**. The app then lives at `https://<user>.github.io/<repo>/score-study/`.
 
 ### Data & sync
 
 - Data is stored in `localStorage`, keyed per browser.
 - **Settings → Backup**: export/import a JSON snapshot.
-- **Settings → GitHub sync** (optional, for multi-device): stores your data as a JSON file in a repo via the GitHub API. Create a **fine-grained personal access token** scoped to *only* that repo with *Contents: read & write*, and paste it in Settings. The token never leaves your browser. Push at the end of a session, pull at the start of the next.
+- **Settings → GitHub sync** (multi-device): with auto-sync on, the app loads the newest copy of your data (`data/score-study-data.json` in this repo) when opened and quietly pushes changes a few seconds after you make them — newest timestamp wins. One-time setup per device: create a **fine-grained personal access token** scoped to *only* this repo with *Contents: read & write* and paste it into Settings. The token never leaves the browser and is stripped from all backups and synced files. Note: in a public repo, the synced data file (titles, passages, notes) is publicly readable.
 - Browser notifications (optional) fire while the app is open when tests come due. A static page can't push notifications when closed — the Today page is the source of truth.
 
 ## Suggested workflow

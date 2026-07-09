@@ -113,7 +113,7 @@ const Store = {
       settings: {
         dailyMinimumMinutes: 10,
         notifications: false,
-        github: { owner: '', repo: '', branch: '', path: 'data/score-study-data.json', token: '', sha: null },
+        github: { owner: 'd5nf9kcskk-byte', repo: 'longitude', branch: '', path: 'data/score-study-data.json', token: '', autoSync: true },
       },
       works: [],
       sessions: [],   // {id, date, workId, passageId|null, modeId, minutes, struggle, note}
@@ -134,13 +134,21 @@ const Store = {
     const d = this.defaultState();
     this.state.settings = Object.assign(d.settings, this.state.settings || {});
     this.state.settings.github = Object.assign(d.settings.github, this.state.settings.github || {});
+    // if a stored (pre-sync) config left owner/repo blank, adopt the defaults
+    if (!this.state.settings.github.owner && !this.state.settings.github.repo) {
+      this.state.settings.github.owner = d.settings.github.owner;
+      this.state.settings.github.repo = d.settings.github.repo;
+    }
     this.state.dayLog = this.state.dayLog || {};
     this.state.lastSynthesis = this.state.lastSynthesis || {};
+    this.state.meta = this.state.meta || { updatedAt: null };
     return this.state;
   },
 
   save() {
+    this.state.meta = { updatedAt: new Date().toISOString() };
     localStorage.setItem(DATA_KEY, JSON.stringify(this.state));
+    if (typeof App !== 'undefined' && App.queueAutoPush) App.queueAutoPush();
   },
 
   uid() {
@@ -255,7 +263,13 @@ const Store = {
 
   /* ----- import/export ----- */
 
-  exportJSON() { return JSON.stringify(this.state, null, 2); },
+  /* Token is stripped from every export: backups and the synced file must
+     never contain the PAT (the sync file lives in a repo). */
+  exportJSON() {
+    const copy = JSON.parse(JSON.stringify(this.state));
+    if (copy.settings && copy.settings.github) copy.settings.github.token = '';
+    return JSON.stringify(copy, null, 2);
+  },
 
   importJSON(text) {
     const obj = JSON.parse(text);

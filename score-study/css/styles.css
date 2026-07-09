@@ -71,6 +71,9 @@ a { color: var(--accent); text-decoration: none; }
 }
 .brand { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
 .brand-mark { margin-right: 2px; }
+.sync-dot { display: none; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; vertical-align: 2px; }
+.sync-dot.ok { display: inline-block; background: var(--good); }
+.sync-dot.fail { display: inline-block; background: var(--critical); }
 .nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .nav a {
   color: var(--ink-2); padding: 6px 12px; border-radius: 8px; font-weight: 500;

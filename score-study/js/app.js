@@ -16,6 +16,7 @@ const App = {
     this.render();
     this.notifyIfDue();
     setInterval(() => this.notifyIfDue(), 30 * 60 * 1000);
+    this.autoSyncOnLoad();
   },
 
   route() {
@@ -76,7 +77,7 @@ const App = {
     const el = e.target.closest('[data-action], [data-gh]');
     if (!el) return;
     if (el.dataset.gh) {
-      Store.state.settings.github[el.dataset.gh] = el.value.trim();
+      Store.state.settings.github[el.dataset.gh] = el.type === 'checkbox' ? el.checked : el.value.trim();
       Store.save();
       return;
     }
@@ -370,14 +371,14 @@ const App = {
     if (el) el.textContent = msg;
   },
 
-  async ghPush() {
+  async ghPush(silent = false) {
     const conf = this.ghUrl();
-    if (!conf || !conf.g.token) return this.ghStatus('Fill in owner, repo, path, and token first.');
-    this.ghStatus('Pushing…');
+    if (!conf || !conf.g.token) return silent ? undefined : this.ghStatus('Fill in owner, repo, path, and token first.');
+    if (!silent) this.ghStatus('Pushing…');
     try {
       // fetch current sha (if the file exists)
       let sha = null;
-      const head = await fetch(conf.url + conf.ref, { headers: this.ghHeaders(conf.g) });
+      const head = await fetch(conf.url + conf.ref, { headers: this.ghHeaders(conf.g), cache: 'no-store' });
       if (head.ok) sha = (await head.json()).sha;
       const body = {
         message: `score study data ${todayStr()}`,
@@ -387,8 +388,64 @@ const App = {
       if (sha) body.sha = sha;
       const res = await fetch(conf.url, { method: 'PUT', headers: this.ghHeaders(conf.g), body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`${res.status} ${(await res.json()).message || ''}`);
-      this.ghStatus('✓ Pushed to GitHub.');
-    } catch (e) { this.ghStatus('Push failed: ' + e.message); }
+      this.ghStatus(silent ? '✓ Auto-synced to GitHub.' : '✓ Pushed to GitHub.');
+      this.setSyncDot('ok');
+    } catch (e) {
+      this.ghStatus('Push failed: ' + e.message);
+      this.setSyncDot('fail');
+      if (!silent) console.warn(e);
+    }
+  },
+
+  /* Debounced auto-push: fires a few seconds after the last data change. */
+  queueAutoPush() {
+    const g = Store.state.settings.github;
+    if (this._syncing || !g.autoSync || !g.token || !g.owner || !g.repo) return;
+    clearTimeout(this._pushTimer);
+    this._pushTimer = setTimeout(() => this.ghPush(true), 4000);
+  },
+
+  /* On open: adopt whichever copy is newer (device-follows-you sync). */
+  async autoSyncOnLoad() {
+    const g = Store.state.settings.github;
+    if (!g.autoSync || !g.token || !g.owner || !g.repo) return;
+    const conf = this.ghUrl();
+    if (!conf) return;
+    try {
+      const res = await fetch(conf.url + conf.ref, { headers: this.ghHeaders(g), cache: 'no-store' });
+      if (res.status === 404) { this.ghPush(true); return; } // first device seeds the remote copy
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const text = decodeURIComponent(escape(atob(json.content.replace(/\n/g, ''))));
+      const remote = JSON.parse(text);
+      const remoteT = (remote.meta && remote.meta.updatedAt) || '';
+      const localT = (Store.state.meta && Store.state.meta.updatedAt) || '';
+      if (remoteT && remoteT > localT) {
+        this._syncing = true;
+        const keepGh = JSON.parse(JSON.stringify(Store.state.settings.github));
+        Store.importJSON(text);
+        Store.state.settings.github = keepGh; // token/config stay per-device
+        Store.state.meta = remote.meta;       // keep remote timestamp; don't restamp
+        localStorage.setItem(DATA_KEY, JSON.stringify(Store.state));
+        this._syncing = false;
+        this.render();
+        this.toast('Synced: loaded your latest data from GitHub.');
+        this.setSyncDot('ok');
+      } else if (localT && localT > remoteT) {
+        this.ghPush(true); // this device has newer work — send it up
+      } else {
+        this.setSyncDot('ok');
+      }
+    } catch (e) {
+      this._syncing = false;
+      this.setSyncDot('fail');
+      console.warn('Auto-sync failed:', e);
+    }
+  },
+
+  setSyncDot(state) {
+    const el = document.getElementById('sync-dot');
+    if (el) { el.className = 'sync-dot ' + state; el.title = state === 'ok' ? 'GitHub sync: up to date' : 'GitHub sync: failed — check Settings'; }
   },
 
   async ghPull() {
