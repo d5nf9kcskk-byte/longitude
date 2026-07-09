@@ -22,7 +22,7 @@ service cloud.firestore {
     function isOwner() {
       return request.auth != null
         && request.auth.token.email in [
-          'ggmuze@yahoo.com'
+          'nwsaorchestras@gmail.com'
           // add more emails here, comma-separated
         ];
     }
