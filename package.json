@@ -1,0 +1,23 @@
+{
+  "name": "longitude",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^12.15.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router": "^8.0.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "firebase-admin": "^13.4.0",
+    "vite": "^8.0.10"
+  }
+}

@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Longitude — Firestore security rules
+//
+// Everything in Longitude is PRIVATE. Unlike NWSA Music Hub there is no
+// public surface: recruitment prospects (minors' names and schools), draft
+// writing, tasks, and ideas are all owner-only.
+//
+// Google sign-in lets ANY Google account authenticate, so checking only
+// `request.auth != null` would expose everything to anyone who finds the
+// URL. The allowlist below is the actual gate.
+//
+// The AI Reader GitHub Action authenticates with a service account via the
+// Admin SDK, which bypasses these rules — so it can read pending requests
+// and write responses regardless of what's below.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'ggmuze@yahoo.com'
+          // add more emails here, comma-separated
+        ];
+    }
+
+    // One document per module (season planner, workbench, syllabi, …)
+    match /modules/{doc}    { allow read, write: if isOwner(); }
+
+    // AI Reader queue: the app writes pending requests and listens for the
+    // GitHub Action to mark them done.
+    match /aiRequests/{doc} { allow read, write: if isOwner(); }
+
+    // Deny everything else by default
+    match /{document=**}    { allow read, write: if false; }
+  }
+}

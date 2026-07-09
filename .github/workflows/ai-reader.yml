@@ -1,0 +1,28 @@
+name: AI Reader
+
+on:
+  # Poll for queued Schwarz Workbench requests. GitHub cron is best-effort;
+  # expect replies within ~15-30 minutes of sending.
+  schedule:
+    - cron: '*/15 * * * *'
+  # Run immediately from the Actions tab when you don't want to wait.
+  workflow_dispatch:
+
+jobs:
+  answer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm install
+
+      - name: Answer pending AI Reader requests
+        run: node scripts/ai-reader.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}

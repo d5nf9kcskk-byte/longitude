@@ -1,0 +1,12 @@
+{
+  "name": "Longitude",
+  "short_name": "Longitude",
+  "description": "Grant Gilman's personal operating hub",
+  "start_url": "/longitude/",
+  "display": "standalone",
+  "background_color": "#0f1014",
+  "theme_color": "#0f1014",
+  "icons": [
+    { "src": "/longitude/longitude.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

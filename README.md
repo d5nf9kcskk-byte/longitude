@@ -1,67 +1,108 @@
 # Longitude
 
-This repo hosts the **Longitude** app collection. The root landing page is `index.html`; each app lives in its own folder so they never collide:
+Grant Gilman's personal operating hub — marking where you are on a long
+trajectory. One app, seven modules:
 
-- **`score-study/`** — 🎼 Score Study (below)
-- *(root)* — reserved for the Longitude app itself
+| Module | Route | What it does |
+|---|---|---|
+| **Season Planner** | `#/season` | Program five NWSA ensembles, track the American-music percentage |
+| **Schwarz Workbench** | `#/workbench` | Thesis, sectioned draft, research notes, and an AI editorial reader for the Schwarz recording-legacy article |
+| **Syllabus Essentials** | `#/syllabi` | One core objective per course; keep/cut lists, units, assessments |
+| **Recruitment** | `#/recruiting` | Prospect pipeline, June→September timeline, editable email templates |
+| **Study Log** | `#/practice` | Score study / baton / piano / listening sessions, weekly minutes, streak |
+| **Idea Capture** | `#/ideas` | Quick capture with tags (American Muse, programming, writing…) |
+| **Task Board** | `#/tasks` | Now · Next · Later · Done, tagged by area |
 
----
+## Companion apps
 
-# 🎼 Score Study
+Standalone static apps live in their own top-level folders and are copied
+into the Pages deployment beside the Vite build:
 
-A browser-based coach for learning musical scores as efficiently as possible — built by adapting Justin Sung's learning-science framework (encoding-first study, PACER information types, priming, generative effort, deadline-aware spaced recall) to the specific realities of score study.
+- **`score-study/`** — 🎼 Score Study, an encoding-first score-learning
+  coach (spaced recall, PACER passage types, deadline-aware scheduling).
+  Static HTML/CSS/JS with localStorage + optional GitHub sync into
+  `data/` (which the deploy workflow ignores as a trigger). Served at
+  `/score-study/`; see its own README/Method page for the framework.
 
-**No build, no server, no dependencies.** Static HTML/CSS/JS; your data lives in the browser's local storage, with JSON export/import and optional GitHub sync.
+## How it works
 
-## What it does
+- **React 19 + Vite**, plain JSX, no CSS framework — the whole UI is the
+  dark chart-room look with a gold meridian accent.
+- **Firebase Firestore** holds all data (one document per module in the
+  `modules` collection), synced in real time across devices, with a
+  localStorage mirror for offline resilience. **Everything is private** —
+  Firestore rules allow only the allowlisted Google account(s) in
+  `firestore.rules`.
+- **Google sign-in** gates the whole app.
+- **GitHub Pages** hosts it; pushes to `main` deploy automatically.
+- **AI Reader** (Schwarz Workbench) never exposes an API key in the
+  browser: the app queues requests in Firestore, and the `AI Reader`
+  GitHub Action answers them with the Claude API every ~15 minutes (or
+  on demand from the Actions tab).
 
-- **Decides for you** — a daily plan in method order: due recall tests first, then priming for new works, then re-encoding for lapsed passages, then deep encoding for weak/critical passages, then the weekly synthesis test. Every task says *why* it's next and ships with a two-minute starter version (the win is starting, not finishing).
-- **Tracks progress** — every passage moves through phases (**New → Encoding → Testing → Secure**) with per-work progress bars, an activity chart, streaks, and a generative-vs-consumptive balance meter.
-- **Reminds you to test yourself** — an encoding-weighted, deadline-aware spaced-recall scheduler tells you exactly when to recall each passage, with prompts generated from what *kind* of material it is.
-- **Keeps the method honest** — failed recalls prescribe *re-encoding* (not just more reps), consumption-heavy weeks trigger a rebalance nudge, and a worst-day minimum keeps the streak alive on exhausted evenings.
+> **Note:** this repo is public (free GitHub Pages requires it), so nothing
+> personal belongs in the code — names, phone numbers, prospect data all
+> live in Firestore behind sign-in. Keep it that way.
 
-## The method, in one paragraph
-
-Retrieval practice (flashcards, spaced repetition) is a *check*, not the engine — if a passage is weakly encoded, no review schedule saves it. So the app makes you **prime** each work first (architecture before detail), classify passages by material type (**PACER, translated for the podium**: Gestural / Relational / Structural / Evidence / Reference), and encode them with *generative* work — singing lines, piano reduction, harmonic analysis, conducting from memory, writing out from memory. Only then does spaced recall kick in, with intervals lengthened by encoding depth and compressed as the performance date approaches, so retention peaks on the day it matters. The full mapping from the source videos to score study is on the app's **Method** page.
-
-### Where each idea came from
-
-| Source video (Justin Sung) | Adapted for score study as… |
-|---|---|
-| *The PROBLEM with Active Recall and Spaced Repetition* | Encoding depth drives the schedule; lapses prescribe re-encoding |
-| *5 Techniques of Every Successful Student* (priming) | Mandatory priming checklist before passage-level work |
-| *How to Remember Everything You Read* (PACER) | Passage types: Gestural (P), Relational (A), Structural (C), Evidence (E), Reference (R) — each with its own study treatment and test prompts |
-| *6 Levels of Thinking* (Bloom's, start at Evaluate) | Every recall test ends with an evaluate-level "so what?" prompt |
-| *How to Learn ANYTHING Faster* (generation, iteration) | Consume/generate/recall mode classes; micro-retrieval after every generative session; weekly synthesis test |
-| *How To Learn Any Skill So Fast It Feels Illegal* (5:1 practice:theory) | 14-day generative-ratio meter with a rebalance nudge |
-| *How To Be So Productive That It Feels ILLEGAL* (Pareto, Zeigarnik) | ★ critical passages (and critical bars) jump the queue; two-minute starters on every task |
-| *How to Build Systems to Actually Achieve Your Goals* | Worst-day minimum + streak; the plan survives the tired day |
-| *4 Steps to Read Difficult Texts Faster* | Chunk / allocate inner ear / reflect / predict — attached as hints to listening & analysis modes |
-
-## Running it
-
-It's a static site — open `score-study/index.html` in a browser, or serve the repo root:
+## Local development
 
 ```bash
-python3 -m http.server 8000   # then open http://localhost:8000/score-study/
+npm install
+cp .env.local.template .env.local   # fill in your Firebase web config
+npm run dev
 ```
 
-### GitHub Pages (recommended)
+## One-time setup
 
-A workflow (`.github/workflows/pages.yml`) deploys the whole repo on every push (data-sync commits under `data/` are ignored). One-time setup: in the repo's **Settings → Pages**, set **Source** to **GitHub Actions**. The app then lives at `https://<user>.github.io/<repo>/score-study/`.
+### 1. Firebase (~10 min)
 
-### Data & sync
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
+   (free Spark plan) — e.g. `longitude-gg`.
+2. **Firestore Database** → Create database (production mode).
+3. **Authentication** → Sign-in method → enable **Google**.
+4. **Project settings → Your apps → Web app** (`</>`) → register → copy the
+   config values into `.env.local` (template provided).
 
-- Data is stored in `localStorage`, keyed per browser.
-- **Settings → Backup**: export/import a JSON snapshot.
-- **Settings → GitHub sync** (multi-device): with auto-sync on, the app loads the newest copy of your data (`data/score-study-data.json` in this repo) when opened and quietly pushes changes a few seconds after you make them — newest timestamp wins. One-time setup per device: create a **fine-grained personal access token** scoped to *only* this repo with *Contents: read & write* and paste it into Settings. The token never leaves the browser and is stripped from all backups and synced files. Note: in a public repo, the synced data file (titles, passages, notes) is publicly readable.
-- Browser notifications (optional) fire while the app is open when tests come due. A static page can't push notifications when closed — the Today page is the source of truth.
+### 2. Security rules
 
-## Suggested workflow
+Edit the email allowlist in `firestore.rules` if needed, then either paste
+the file's contents into Firebase Console → Firestore → Rules → Publish, or:
 
-1. **Add a work** with its performance date (this drives the whole schedule).
-2. **Prime it** — the four-step big-picture pass. Don't skip; don't go deep.
-3. **Break it into passages** along the structural seams. Keep transitions as their own passages. Star the ~20% that carry the performance.
-4. Each day, open **Today** and do what it says. Log every session honestly — including the struggle rating.
-5. When a recall test comes due, score closed, struggle first, grade honestly. `Again` means the encoding needs fixing, and the app will say so.
-6. Once a week per work, run the **synthesis test**: rebuild the whole form map from a blank page.
+```bash
+npm install -g firebase-tools
+firebase login
+firebase deploy --only firestore:rules --project YOUR_PROJECT_ID
+```
+
+### 3. GitHub Pages
+
+1. Repo **Settings → Pages → Source: GitHub Actions**.
+2. Repo **Settings → Secrets and variables → Actions** → add:
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+3. Push to `main` → live at `https://<owner>.github.io/longitude/`.
+4. Firebase Console → **Authentication → Settings → Authorized domains** →
+   add `<owner>.github.io` so Google sign-in works on the hosted site.
+
+### 4. AI Reader (optional)
+
+Two more Actions secrets:
+
+- `ANTHROPIC_API_KEY` — from [console.anthropic.com](https://console.anthropic.com)
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — Firebase Console → Project settings →
+  Service accounts → Generate new private key → paste the whole JSON file
+  as the secret value
+
+The workflow runs every 15 minutes (GitHub cron is best-effort) and can be
+run immediately via *Actions → AI Reader → Run workflow*. Note that GitHub
+disables cron schedules on repos with no pushes for 60 days — a single
+commit re-enables it.
+
+## Add to your phone
+
+Open the site in Safari (iOS) → Share → **Add to Home Screen**. It runs
+standalone and syncs with your other devices through Firestore.
