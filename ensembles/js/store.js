@@ -487,20 +487,30 @@ const Store = {
       contacts: [], extra: {},
     };
     const slots = {};
+    // When two columns target the same scalar field ("Phone" + "Cell",
+    // duplicate headers…), the second value must not vanish — it overflows
+    // into `extra` under its own header so ALL spreadsheet data survives.
+    const setScalar = (field, val, header) => {
+      if (!st[field]) { st[field] = val; return; }
+      if (st[field] === val) return;
+      let key = header || field;
+      while (key in st.extra && st.extra[key] !== val) key += ' (2)';
+      st.extra[key] = val;
+    };
     mapping.forEach((spec, i) => {
       const val = String(row[i] == null ? '' : row[i]).trim();
       if (!val || spec.kind === 'skip') return;
       switch (spec.kind) {
-        case 'first': st.first = val; break;
-        case 'last': st.last = val; break;
-        case 'preferred': st.preferred = val; break;
-        case 'grade': st.grade = val.replace(/^grade\s*/i, ''); break;
-        case 'instrument': st.instrument = val; break;
-        case 'section': st.section = val; break;
-        case 'email': st.email = val; break;
-        case 'phone': st.phone = val; break;
-        case 'sid': st.sid = val; break;
-        case 'notes': st.notes = val; break;
+        case 'first': setScalar('first', val, spec.header); break;
+        case 'last': setScalar('last', val, spec.header); break;
+        case 'preferred': setScalar('preferred', val, spec.header); break;
+        case 'grade': setScalar('grade', val.replace(/^grade\s*/i, ''), spec.header); break;
+        case 'instrument': setScalar('instrument', val, spec.header); break;
+        case 'section': setScalar('section', val, spec.header); break;
+        case 'email': setScalar('email', val, spec.header); break;
+        case 'phone': setScalar('phone', val, spec.header); break;
+        case 'sid': setScalar('sid', val, spec.header); break;
+        case 'notes': st.notes = st.notes ? st.notes + '\n' + val : val; break;
         case 'full': {
           if (val.includes(',')) {
             const [l, f] = val.split(',');
@@ -534,7 +544,11 @@ const Store = {
           else if (spec.field === 'phone') slots[spec.slot].phone = slots[spec.slot].phone ? slots[spec.slot].phone + ', ' + val : val;
           break;
         }
-        default: st.extra[spec.header] = val;
+        default: {
+          let key = spec.header || 'Column ' + (i + 1);
+          while (key in st.extra && st.extra[key] !== val) key += ' (2)';
+          st.extra[key] = val;
+        }
       }
     });
     st.contacts = Object.keys(slots).sort((a, b) => a - b).map(k => slots[k])
@@ -555,7 +569,7 @@ const Store = {
      Returns a report; also lists active students NOT present in the file so
      the UI can offer to archive them at semester turnover. */
   mergeImport(incoming, mode) {
-    const report = { added: [], updated: [], unchanged: [], restored: [], notInFile: [] };
+    const report = { added: [], updated: [], unchanged: [], restored: [], notInFile: [], skippedNoName: 0 };
     const index = new Map();
     for (const s of this.data.students) index.set(this.matchKey(s), s);
     // also index by plain name so a file without emails still matches
@@ -565,7 +579,7 @@ const Store = {
     }
     const seen = new Set();
     for (const inc of incoming) {
-      if (!(inc.first || '').trim() && !(inc.last || '').trim()) continue;
+      if (!(inc.first || '').trim() && !(inc.last || '').trim()) { report.skippedNoName++; continue; }
       const keys = [this.matchKey(inc), 'nm:' + U.norm(inc.first + ' ' + inc.last)];
       const match = keys.map(k => index.get(k)).find(Boolean);
       if (match) {

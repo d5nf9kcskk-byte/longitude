@@ -26,7 +26,10 @@ U.parseYmd = function (s) {
   if (!s || typeof s !== 'string') return null;
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  return new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0);
+  const d = new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0);
+  // Reject impossible dates (2027-02-29) instead of silently rolling forward.
+  if (d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) return null;
+  return d;
 };
 
 U.addDays = function (ymdStr, n) {
@@ -79,8 +82,14 @@ U.relDate = function (ymdStr) {
 };
 
 /* ---------- times ('HH:MM' 24h internal) ---------- */
+U._validHm = function (hm) {
+  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm)) return false;
+  const [h, m] = hm.split(':').map(Number);
+  return h <= 23 && m <= 59;
+};
+
 U.fmtTime = function (hm) {
-  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm)) return hm || '';
+  if (!U._validHm(hm)) return hm || '';
   let [h, m] = hm.split(':').map(Number);
   const ap = h >= 12 ? 'PM' : 'AM';
   h = h % 12; if (h === 0) h = 12;
@@ -88,7 +97,7 @@ U.fmtTime = function (hm) {
 };
 
 U.fmtTimeShort = function (hm) { // "1:10" — no AM/PM, for compact ranges
-  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm)) return hm || '';
+  if (!U._validHm(hm)) return hm || '';
   let [h, m] = hm.split(':').map(Number);
   h = h % 12; if (h === 0) h = 12;
   return h + ':' + U.pad2(m);
@@ -421,7 +430,14 @@ U.parseDelimited = function (text) {
   text = String(text || '').replace(/\r\n?/g, '\n').replace(/^﻿/, '');
   if (!text.trim()) return [];
   const firstLine = text.slice(0, text.indexOf('\n') === -1 ? text.length : text.indexOf('\n'));
-  const delim = (firstLine.match(/\t/g) || []).length >= (firstLine.match(/,/g) || []).length && firstLine.includes('\t') ? '\t' : ',';
+  // Pick the most frequent of tab / comma / semicolon — European Excel
+  // exports use ';' and would otherwise collapse every row into one cell.
+  const counts = [
+    ['\t', (firstLine.match(/\t/g) || []).length],
+    [';', (firstLine.match(/;/g) || []).length],
+    [',', (firstLine.match(/,/g) || []).length],
+  ].sort((a, b) => b[1] - a[1]);
+  const delim = counts[0][1] > 0 ? counts[0][0] : ',';
   const rows = [];
   let row = [], cur = '', inQ = false;
   for (let i = 0; i < text.length; i++) {

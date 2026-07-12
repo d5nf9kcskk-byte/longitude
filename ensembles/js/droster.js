@@ -422,7 +422,11 @@ DRoster.mappingDialog = function (rows) {
     { value: 'email', label: 'Student email' }, { value: 'phone', label: 'Student phone' },
     { value: 'sid', label: 'Student ID' }, { value: 'notes', label: 'Notes' },
   ];
-  for (let slot = 0; slot < 6; slot++) {
+  // Offer at least 6 contact slots, or as many as the auto-mapping actually
+  // used — so a 7th guardian column never shows a lying "Ignore column".
+  const maxAutoSlot = Math.max(-1, ...mapping.filter(m => m.kind === 'contact').map(m => m.slot));
+  const slotCount = Math.max(6, maxAutoSlot + 2);
+  for (let slot = 0; slot < slotCount; slot++) {
     for (const f of ['name', 'relation', 'email', 'phone']) {
       FIELD_OPTS.push({ value: 'contact:' + slot + ':' + f, label: 'Contact ' + (slot + 1) + ' — ' + f });
     }
@@ -467,10 +471,17 @@ DRoster.mappingDialog = function (rows) {
       class: 'btn primary',
       onclick: () => {
         const incoming = rows.slice(1).map(r => Store.rowToStudent(r, mapping));
+        // Parse sanity check BEFORE touching the roster: if not a single row
+        // produced a student name, the file/mapping is wrong — importing
+        // would add nothing and then offer to archive everyone "missing".
+        if (!incoming.some(inc => (inc.first || '').trim() || (inc.last || '').trim())) {
+          U.toast('No student names found in any row — check the delimiter and the name column mapping above. Nothing was imported.', 'error');
+          return;
+        }
         const report = Store.mergeImport(incoming, mode);
         DRoster.importReport(report);
       },
-    }, 'Import ' + (rows.length - 1) + ' rows'),
+    }, 'Import ' + U.plural(rows.length - 1, 'row')),
     U.el('button', { class: 'btn ghost', onclick: () => U.closeModal() }, 'Cancel')));
 
   // noAutofocus: focusing a <select> inside the scrollable table would yank
@@ -480,13 +491,24 @@ DRoster.mappingDialog = function (rows) {
 
 DRoster.importReport = function (report) {
   const body = U.el('div');
-  const line = (n, txt) => U.el('div', { class: 'checkline' }, U.el('b', { style: { minWidth: '34px' } }, String(n)), txt);
-  body.appendChild(line(report.added.length, 'new students added'));
-  body.appendChild(line(report.updated.length, 'existing students updated with the file\'s info (conflicting fields replaced; notes & history kept)'));
+  const line = (n, one, many) => U.el('div', { class: 'checkline' },
+    U.el('b', { style: { minWidth: '34px' } }, String(n)), n === 1 ? one : many);
+  body.appendChild(line(report.added.length, 'new student added', 'new students added'));
+  body.appendChild(line(report.updated.length,
+    'existing student updated with the file\'s info (conflicting fields replaced; notes & history kept)',
+    'existing students updated with the file\'s info (conflicting fields replaced; notes & history kept)'));
   if (report.restored && report.restored.length) {
-    body.appendChild(line(report.restored.length, 'returning students restored from Archived · Alumni (they were in the new file)'));
+    body.appendChild(line(report.restored.length,
+      'returning student restored from Archived · Alumni (they were in the new file)',
+      'returning students restored from Archived · Alumni (they were in the new file)'));
   }
-  body.appendChild(line(report.unchanged.length, 'already up to date'));
+  body.appendChild(line(report.unchanged.length, 'already up to date', 'already up to date'));
+  if (report.skippedNoName) {
+    body.appendChild(U.el('div', { class: 'checkline', style: { color: 'var(--tardy)' } },
+      U.el('b', { style: { minWidth: '34px' } }, String(report.skippedNoName)),
+      (report.skippedNoName === 1 ? 'row was skipped — it had no student name. ' : 'rows were skipped — they had no student name. ') +
+      'If those rows are real students, re-import and check which column is mapped to the name.'));
+  }
   if (report.notInFile.length) {
     body.appendChild(U.el('hr', { class: 'divider' }));
     body.appendChild(U.el('div', { class: 'card-body' },

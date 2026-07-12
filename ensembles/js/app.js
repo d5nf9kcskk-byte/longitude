@@ -215,5 +215,13 @@ try {
   Store.loadIssues = ['Saved data could not be read at all (' + (e && e.message ? e.message : 'unknown error') + '). The app restarted with defaults; check Settings → Recovery.'];
 }
 window.addEventListener('hashchange', () => App.render());
+// Another tab (say, the student view projected next to the director's) saved
+// changes: reload and re-render so neither tab silently clobbers the other.
+window.addEventListener('storage', e => {
+  if (e.key === Store.KEY) {
+    Store.load();
+    App.render();
+  }
+});
 if (!location.hash) location.hash = '#/today';
 App.render();

@@ -142,10 +142,18 @@ Cards.piece = function (p, opts) {
    Archived students are invisible app-wide: their seats render as open so
    nothing about them surfaces here (their id stays stored, so restoring the
    student puts them right back in their seat). */
-Cards.seatingView = function (chart) {
+Cards.seatingView = function (chart, opts) {
+  opts = opts || {};
   const wrap = U.el('div');
   wrap.appendChild(U.el('div', { class: 'stage-strip' }, 'Stage / Conductor'));
-  for (const sec of chart.sections) {
+  const sections = opts.hideEmpty
+    ? chart.sections.filter(sec => sec.seatIds.some(sid => Store.isVisibleStudent(sid)))
+    : chart.sections;
+  if (opts.hideEmpty && !sections.length) {
+    wrap.appendChild(U.el('div', { class: 'hint' }, 'No seats have been assigned on this chart yet.'));
+    return wrap;
+  }
+  for (const sec of sections) {
     const visible = sec.seatIds.filter(sid => Store.isVisibleStudent(sid));
     const secEl = U.el('div', { class: 'seat-section' });
     secEl.appendChild(U.el('div', { class: 'seat-sec-title' }, sec.name,
@@ -440,11 +448,13 @@ function announcementsPage(container, opts) {
   const dirOpts = opts.director ? {
     director: true,
     onEdit: a => DContent.announcementDialog(a),
-    onPin: a => { a.pinned = !a.pinned; Store.save(); App.render(); },
+    // closeModal first: these can fire inside a month-day dialog, which
+    // would otherwise keep showing the stale card after the change.
+    onPin: a => { a.pinned = !a.pinned; Store.save(); U.closeModal(); App.render(); },
     onDelete: a => {
       if (!U.confirmBox('Delete announcement "' + a.title + '"?')) return;
       Store.data.announcements = Store.data.announcements.filter(x => x.id !== a.id);
-      Store.save(); App.render();
+      Store.save(); U.closeModal(); App.render();
     },
   } : {};
 
@@ -506,7 +516,7 @@ function assignmentsPage(container, opts) {
     onDelete: a => {
       if (!U.confirmBox('Delete assignment "' + a.title + '"?')) return;
       Store.data.assignments = Store.data.assignments.filter(x => x.id !== a.id);
-      Store.save(); App.render();
+      Store.save(); U.closeModal(); App.render();   // month-day dialog would go stale
     },
   } : {};
 
@@ -708,7 +718,8 @@ function pieceDetailPage(container, id, opts) {
     chartCard.appendChild(U.el('div', { class: 'card-meta' },
       U.el('span', null, '🪑 ' + chart.name),
       opts.director ? U.el('a', { class: 'btn sm', href: '#/d/seating/' + chart.id }, 'Open chart') : null));
-    chartCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, Cards.seatingView(chart)));
+    // hideEmpty: students shouldn't scroll past a dozen "no seats yet" boxes
+    chartCard.appendChild(U.el('div', { style: { marginTop: '10px' } }, Cards.seatingView(chart, { hideEmpty: true })));
     container.appendChild(chartCard);
   } else {
     container.appendChild(U.el('div', { class: 'card hint' },
@@ -744,9 +755,11 @@ Views.public.today = function (container) {
     for (const a of soon) container.appendChild(Cards.assignment(a, {}));
   }
 
-  // Coming up (events & concerts, 14 days)
+  // Coming up (events & concerts, 14 days). Division events stay calendar-only
+  // per the client: their dates live on the calendar, not in music feeds.
   const upcoming = [];
   for (const ev of Store.data.events) {
+    if ((ev.tag || {}).type === 'division') continue;
     if (ev.date >= today && ev.date <= U.addDays(today, 14)) upcoming.push({ date: ev.date, node: Cards.event(ev, {}) });
   }
   for (const con of Store.data.concerts) {
