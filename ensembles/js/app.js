@@ -41,6 +41,16 @@ const App = {
 
   go(hash) { location.hash = hash; },
 
+  /* Views that rewrite the hash via history.replaceState (deep-link
+     consumption) MUST call this — otherwise the next same-page re-render
+     sees a different route key and wrongly resets the view's state, which
+     can silently retarget edits (e.g. schedule edits landing on today
+     instead of the deep-linked date). */
+  syncRouteKey() {
+    const r = this.route();
+    this._lastRouteKey = r.side + '/' + r.page + '/' + (r.arg || '');
+  },
+
   unlocked() {
     try { return sessionStorage.getItem(this.UNLOCK_KEY) === '1'; } catch (e) { return this._memUnlock === true; }
   },
@@ -132,7 +142,11 @@ const App = {
   renderIssues() {
     const root = document.getElementById('issue-root');
     root.innerHTML = '';
-    if (!Store.loadIssues.length || this._issuesDismissed) return;
+    if (!Store.loadIssues.length) return;
+    // A dismissal only covers the exact issues that were on screen — NEW
+    // problems (say, a later restore dropping a section) always resurface.
+    const sig = JSON.stringify(Store.loadIssues);
+    if (this._issuesDismissed && this._dismissedSig === sig) return;
     const isDir = this.route().side === 'director';
     // Students get one neutral line; the actionable detail belongs to the
     // director (recovery lives in the Director Panel).
@@ -148,13 +162,13 @@ const App = {
           U.el('a', { class: 'btn sm', href: '#/d/settings' }, 'Open Settings → Recovery'),
           U.el('button', {
             class: 'btn sm ghost',
-            onclick: () => { this._issuesDismissed = true; this.renderIssues(); },
+            onclick: () => { this._issuesDismissed = true; this._dismissedSig = JSON.stringify(Store.loadIssues); this.renderIssues(); },
           }, 'Dismiss')))
       : U.el('div', { class: 'issue-banner-inner' },
         'Some saved info on this device could not be read — a director can restore it from Director Panel → Settings. ',
         U.el('button', {
           class: 'btn sm ghost',
-          onclick: () => { this._issuesDismissed = true; this.renderIssues(); },
+          onclick: () => { this._issuesDismissed = true; this._dismissedSig = JSON.stringify(Store.loadIssues); this.renderIssues(); },
         }, 'Dismiss'));
     root.appendChild(U.el('div', { class: 'issue-banner' }, inner));
   },

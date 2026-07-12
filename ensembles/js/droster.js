@@ -311,13 +311,9 @@ DRoster.studentDialog = function (st) {
           email: email.value.trim(), phone: phone.value.trim(),
         });
         draft.contacts = draft.contacts.filter(c => (c.name || c.email || c.phone || '').trim());
-        if (isNew) {
-          draft.id = U.uid();
-          Store.data.students.push(draft);
-        } else {
-          Object.assign(st, draft);
-        }
-        Store.save(); U.closeModal(); App.render();
+        if (isNew) draft.id = U.uid();
+        Store.upsert('students', draft);
+        U.closeModal(); App.render();
         U.toast(isNew ? 'Student added' : 'Student updated');
       },
     }, isNew ? 'Add student' : 'Save changes'),
@@ -940,9 +936,8 @@ DRoster.outDialog = function (w) {
           studentId: sel.value, from: from.value, to: to.value || '',
           reason: reason.value.trim(), note: note.value.trim(),
         };
-        if (isNew) Store.data.whosOut.push(entry);
-        else Object.assign(w, entry);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('whosOut', entry);
+        U.closeModal(); App.render();
       },
     }, isNew ? 'Mark out' : 'Save'),
     U.el('button', { class: 'btn ghost', onclick: () => U.closeModal() }, 'Cancel')));

@@ -271,7 +271,7 @@ function calendarPage(container, opts) {
   toolbar.appendChild(U.el('span', { class: 'toolbar-label' }, 'Show:'));
   const showOptions = [{ value: 'all', label: 'All ensembles & divisions' }]
     .concat(Store.ensembles().map(e => ({ value: e.id, label: e.name })));
-  toolbar.appendChild(U.select(showOptions, filter, v => { Store.setFilter(pageKey, v); App.render(); }));
+  toolbar.appendChild(U.select(showOptions, filter, v => { Store.setFilter(pageKey, v); App.render(); }, { id: 'calendar-show-filter' }));
   toolbar.appendChild(U.el('span', { class: 'grow' }));
   toolbar.appendChild(U.segmented(
     [{ value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
@@ -367,6 +367,7 @@ function calendarPage(container, opts) {
         // Phones hide the text labels and show these dots instead (CSS swap —
         // no inline styles, or the media query could never win).
         const dots = U.el('div', { class: 'mcal-dots compact' });
+        if (changed || noteOnly) dots.appendChild(U.el('span', { class: 'mcal-dot', style: { '--tag-color': 'var(--gold)' } }));
         list.slice(0, 5).forEach(it => dots.appendChild(U.el('span', { class: 'mcal-dot', style: { '--tag-color': it.color === 'var-gold' ? 'var(--gold)' : it.color } })));
         box.appendChild(dots);
         return box;
@@ -788,6 +789,7 @@ Views.public.calendar = function (container, arg) {
   if (arg && Store.ensembleById(arg)) {
     Store.setFilter('pub_calendar', arg);
     history.replaceState(null, '', '#/calendar');
+    App.syncRouteKey();   // else the first tap after arriving gets swallowed
   }
   calendarPage(container, { director: false });
 };

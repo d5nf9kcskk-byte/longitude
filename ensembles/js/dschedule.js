@@ -58,9 +58,8 @@ DSchedule.eventDialog = function (ev, onDone) {
           time: time.value || '', endTime: endTime.value || '',
           location: location.value.trim(), tag, details: details.value.trim(),
         };
-        if (isNew) Store.data.events.push(data);
-        else Object.assign(ev, data);
-        Store.save(); U.closeModal();
+        Store.upsert('events', data);
+        U.closeModal();
         if (onDone) onDone();
         U.toast(isNew ? 'Event added to the calendar' : 'Event updated');
       },
@@ -115,6 +114,7 @@ Views.director.schedule = function (container, arg) {
   if (arg && U.parseYmd(arg)) {
     state.date = arg; state.mode = 'day';
     history.replaceState(null, '', '#/d/schedule');
+    App.syncRouteKey();   // else the next re-render looks "fresh" and snaps back to today
   } else if (App.isFreshNav || !state.mode) {
     // Fresh visits land on today's Day editor — the default.
     state.mode = 'day';
@@ -238,6 +238,7 @@ Views.director.schedule = function (container, arg) {
       'Days marked ● have time changes. Tap any day to edit it.'));
     container.appendChild(U.monthGrid({
       month: state.month,
+      pickAll: true,   // ANY day opens its editor — that's the point of this view
       onNav: m => { state.month = m; App.render(); },
       onPick: ymd => { state.date = ymd; state.mode = 'day'; App.render(); },
       renderDay: ymd => {
@@ -248,6 +249,10 @@ Views.director.schedule = function (container, arg) {
         const box = U.el('div');
         box.appendChild(U.el('span', { class: 'mcal-evt', style: { '--tag-color': 'var(--gold)' } },
           n ? U.plural(n, 'change') : '📝 note'));
+        // phones hide .mcal-evt — give them a dot so changed days stay visible
+        const dots = U.el('div', { class: 'mcal-dots compact' });
+        dots.appendChild(U.el('span', { class: 'mcal-dot', style: { '--tag-color': 'var(--gold)' } }));
+        box.appendChild(dots);
         return box;
       },
     }));
@@ -475,9 +480,8 @@ DSchedule.tempDialog = function (t) {
           ensembleId: ensSel.querySelector('select').value,
           from: from.value, to: to.value || '', note: note.value.trim(),
         };
-        if (isNew) Store.data.tempChanges.push(entry);
-        else Object.assign(t, entry);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('tempChanges', entry);
+        U.closeModal(); App.render();
         U.toast('Temporary change saved — Take Roll follows it on those days');
       },
     }, isNew ? 'Save change' : 'Save'),

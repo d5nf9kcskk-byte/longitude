@@ -248,9 +248,9 @@ const Store = {
       return { ok: false, error: 'That backup contains unreadable entries and was not restored.' };
     }
     this.save();
-    if (dropped.length) {
-      this.loadIssues = dropped.map(k => `The backup's "${k}" section was unreadable and was not restored (everything else was). The previous data is under Settings → Recovery.`);
-    }
+    // A successful restore resolves any earlier issues; a partial one
+    // replaces them with the specifics of what was dropped.
+    this.loadIssues = dropped.map(k => `The backup's "${k}" section was unreadable and was not restored (everything else was). The previous data is under Settings → Recovery.`);
     return { ok: true, dropped };
   },
 
@@ -723,7 +723,21 @@ const Store = {
         ? location.origin + location.pathname : '';
     }
     this.data = d;
+    this.loadIssues = [];   // fresh, known-good content — old warnings are moot
     this.save();
+  },
+
+  /* Upsert by id into a top-level collection. Dialog save handlers use this
+     instead of mutating captured object refs — a cross-tab storage reload can
+     swap Store.data underneath an open dialog, and assigning into the old
+     detached object would silently lose the edit behind a success toast. */
+  upsert(coll, data) {
+    const list = this.data[coll];
+    const live = list.find(x => x.id === data.id);
+    if (live) { Object.assign(live, data); this.save(); return live; }
+    list.push(data);
+    this.save();
+    return data;
   },
 };
 

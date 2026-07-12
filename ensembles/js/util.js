@@ -338,7 +338,18 @@ U.select = function (options, value, onChange, attrs) {
   for (const o of options) {
     sel.appendChild(U.el('option', { value: o.value, selected: String(o.value) === String(value) ? true : null }, o.label));
   }
-  if (onChange) sel.addEventListener('change', () => onChange(sel.value));
+  if (onChange) {
+    sel.addEventListener('change', () => {
+      const id = sel.id;
+      onChange(sel.value);
+      // If the handler re-rendered the page, put keyboard focus back on the
+      // rebuilt control (same id) so arrow-key users can keep stepping.
+      if (id && !document.body.contains(sel)) {
+        const again = document.getElementById(id);
+        if (again) again.focus();
+      }
+    });
+  }
   return U.el('span', { class: 'select-wrap' }, sel, U.el('span', { class: 'select-arrow', 'aria-hidden': 'true' }, '▾'));
 };
 

@@ -67,9 +67,8 @@ DContent.announcementDialog = function (a) {
           date: date.value || U.todayYmd(), pinned: pinned.checked,
           ensembleIds: picker.value(),
         };
-        if (isNew) Store.data.announcements.unshift(data);
-        else Object.assign(a, data);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('announcements', data);
+        U.closeModal(); App.render();
         U.toast(isNew ? 'Announcement posted — it\'s on the student side of this hub now' : 'Announcement updated');
       },
     }, isNew ? 'Post announcement' : 'Save changes'),
@@ -110,9 +109,8 @@ DContent.assignmentDialog = function (a) {
           points: points.value.trim(), link: link.value.trim(),
           ensembleIds: ids === 'all' ? 'all' : ids,
         };
-        if (isNew) Store.data.assignments.push(data);
-        else Object.assign(a, data);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('assignments', data);
+        U.closeModal(); App.render();
         U.toast(isNew ? 'Assignment posted' : 'Assignment updated');
       },
     }, isNew ? 'Post assignment' : 'Save changes'),
@@ -169,9 +167,8 @@ DContent.pieceDialog = function (p) {
           chartId: chartSel.querySelector('select').value,
           notes: notes.value.trim(),
         };
-        if (isNew) Store.data.repertoire.push(data);
-        else Object.assign(p, data);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('repertoire', data);
+        U.closeModal(); App.render();
         U.toast(isNew ? 'Piece added' : 'Piece updated');
       },
     }, isNew ? 'Add piece' : 'Save changes'),
@@ -204,9 +201,8 @@ DContent.concertDialog = function (c) {
           venue: venue.value.trim(),
           ensembleIds: ids === 'all' ? Store.ensembles().map(e => e.id) : ids,
         };
-        if (isNew) Store.data.concerts.push(data);
-        else Object.assign(c, data);
-        Store.save(); U.closeModal(); App.render();
+        Store.upsert('concerts', data);
+        U.closeModal(); App.render();
         U.toast(isNew ? 'Concert created' : 'Concert updated');
       },
     }, isNew ? 'Create concert' : 'Save concert'),
@@ -439,8 +435,11 @@ DContent.applyChartDialog = function (chart) {
       class: 'btn primary',
       onclick: () => {
         for (const { p, cb } of boxes) {
-          if (cb.checked) p.chartId = chart.id;
-          else if (p.chartId === chart.id) p.chartId = '';
+          // re-resolve by id — Store.data may have been reloaded meanwhile
+          const live = Store.data.repertoire.find(x => x.id === p.id);
+          if (!live) continue;
+          if (cb.checked) live.chartId = chart.id;
+          else if (live.chartId === chart.id) live.chartId = '';
         }
         Store.save(); U.closeModal(); App.render();
         U.toast('Seating applied — visible on those piece pages now');
@@ -477,7 +476,7 @@ Views.director.qr = function (container) {
   const urlField = U.input({
     value: base,
     placeholder: 'https://your-site/ensembles/',
-    onchange: e => { s.baseUrl = e.target.value.trim(); Store.save(); App.render(); },
+    onchange: e => { Store.data.settings.baseUrl = e.target.value.trim(); Store.save(); App.render(); },
   });
   container.appendChild(U.el('div', { class: 'card', style: { marginBottom: '14px' } },
     U.field('App address the codes point to', urlField,
@@ -520,15 +519,18 @@ Views.director.qr = function (container) {
    Settings
    ========================================================= */
 Views.director.settings = function (container) {
-  const s = Store.data.settings;
+  // Live accessor, not a captured ref — a cross-tab reload swaps Store.data
+  // and a stale `s` would silently drop whatever gets typed next.
+  const S = () => Store.data.settings;
+  const s = S();
   container.appendChild(U.el('div', { class: 'page-head' },
     U.el('div', null,
       U.el('div', { class: 'page-title' }, 'Settings'),
       U.el('div', { class: 'page-sub' }, 'App identity, director access, blocks, and your data.'))));
 
   // identity
-  const nameIn = U.input({ value: s.appName || '', onchange: e => { s.appName = e.target.value.trim() || 'NWSA Music'; Store.save(); App.render(); } });
-  const subIn = U.input({ value: s.subtitle || '', onchange: e => { s.subtitle = e.target.value.trim(); Store.save(); App.render(); } });
+  const nameIn = U.input({ value: s.appName || '', onchange: e => { S().appName = e.target.value.trim() || 'NWSA Music'; Store.save(); App.render(); } });
+  const subIn = U.input({ value: s.subtitle || '', onchange: e => { S().subtitle = e.target.value.trim(); Store.save(); App.render(); } });
   container.appendChild(U.el('div', { class: 'card' },
     U.el('div', { class: 'card-title' }, 'Identity'),
     U.el('div', { style: { marginTop: '10px' } },
@@ -545,13 +547,13 @@ Views.director.settings = function (container) {
       U.el('button', {
         class: 'btn',
         onclick: () => {
-          s.pin = pin.value.trim();
+          S().pin = pin.value.trim();
           Store.save();
-          U.toast(s.pin ? 'PIN set' : 'PIN removed');
+          U.toast(S().pin ? 'PIN set' : 'PIN removed');
           pin.value = '';
         },
       }, 'Save PIN'),
-      s.pin ? U.el('button', { class: 'btn ghost', onclick: () => { s.pin = ''; Store.save(); U.toast('PIN removed'); App.render(); } }, 'Remove') : null)));
+      s.pin ? U.el('button', { class: 'btn ghost', onclick: () => { S().pin = ''; Store.save(); U.toast('PIN removed'); App.render(); } }, 'Remove') : null)));
 
   // blocks & ensembles
   const blocksCard = U.el('div', { class: 'card' });
@@ -559,15 +561,19 @@ Views.director.settings = function (container) {
   blocksCard.appendChild(U.el('div', { class: 'card-body' },
     'The two school blocks power the one-tap buttons in Schedule Changes.'));
   for (const b of Store.data.blocks) {
-    const st = U.input({ type: 'time', value: b.start, onchange: e => { b.start = e.target.value || b.start; Store.save(); App.render(); } });
-    const en = U.input({ type: 'time', value: b.end, onchange: e => { b.end = e.target.value || b.end; Store.save(); App.render(); } });
+    const liveBlock = () => Store.data.blocks.find(x => x.id === b.id) || b;
+    const st = U.input({ type: 'time', value: b.start, onchange: e => { const lb = liveBlock(); lb.start = e.target.value || lb.start; Store.save(); App.render(); } });
+    const en = U.input({ type: 'time', value: b.end, onchange: e => { const lb = liveBlock(); lb.end = e.target.value || lb.end; Store.save(); App.render(); } });
     blocksCard.appendChild(U.el('div', { class: 'field-row', style: { marginTop: '8px', alignItems: 'center' } },
       U.el('b', { style: { flex: '0 0 80px' } }, b.label), st, en));
   }
   blocksCard.appendChild(U.el('hr', { class: 'divider' }));
   for (const e of Store.ensembles()) {
     const sel = U.select(Store.data.blocks.map(b => ({ value: b.id, label: b.label + ' · ' + U.fmtTimeRange(b.start, b.end) })),
-      e.blockId, v => { e.blockId = v; Store.save(); App.render(); });
+      e.blockId, v => {
+        const live = Store.ensembleById(e.id);
+        if (live) { live.blockId = v; Store.save(); App.render(); }
+      }, { id: 'block-sel-' + e.id });
     blocksCard.appendChild(U.el('div', { class: 'field-row', style: { marginTop: '8px', alignItems: 'center' } },
       U.el('b', { style: { flex: '1' } }, e.name), sel));
   }
@@ -611,7 +617,9 @@ Views.director.settings = function (container) {
       onclick: () => {
         if (!U.confirmBox('Erase ALL data on this device? A recovery copy is stashed, but download a backup first if this data matters.')) return;
         Store.stashRecovery(localStorage.getItem(Store.KEY) || '');
-        Store.data = Store.defaults(); Store.save(); App.render();
+        Store.data = Store.defaults();
+        Store.loadIssues = [];   // a deliberate wipe resolves old warnings
+        Store.save(); App.render();
       },
     }, 'Erase everything')));
   container.appendChild(dataCard);
