@@ -77,6 +77,11 @@ button { font: inherit; color: inherit; }
 /* =========================================================
    Director banner — the unmistakable "you are in the back end" strip
    ========================================================= */
+/* #chrome (banner + topbar + nav together) is the sticky element — sticking
+   the children individually inside an auto-height wrapper gives them zero
+   travel room, so they'd scroll straight off screen. */
+#chrome { position: sticky; top: 0; z-index: 60; }
+
 .director-banner {
   background: #07090d;
   color: #f5e7c8;
@@ -90,9 +95,6 @@ button { font: inherit; color: inherit; }
   letter-spacing: 0.22em;
   text-transform: uppercase;
   font-weight: 700;
-  position: sticky;
-  top: 0;
-  z-index: 60;
 }
 .director-banner .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 .director-banner .sub {
@@ -103,14 +105,11 @@ button { font: inherit; color: inherit; }
 
 /* ---------- topbar ---------- */
 .topbar {
-  position: sticky;
-  z-index: 50;
-  top: 0;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
-body.side-public .topbar { background: rgba(246, 244, 239, 0.86); border-bottom: 1px solid var(--line); }
-body.side-director .topbar { background: rgba(13, 16, 21, 0.92); border-bottom: 1px solid var(--line); top: 32px; }
+body.side-public .topbar { background: rgba(246, 244, 239, 0.93); border-bottom: 1px solid var(--line); }
+body.side-director .topbar { background: rgba(13, 16, 21, 0.96); border-bottom: 1px solid var(--line); }
 
 .topbar-inner {
   max-width: var(--maxw);
@@ -139,8 +138,8 @@ body.side-director .topbar { background: rgba(13, 16, 21, 0.92); border-bottom: 
 .nav::-webkit-scrollbar { display: none; }
 /* Tablets/desktop: wrap instead of hiding tabs offscreen. */
 @media (min-width: 641px) { .nav { flex-wrap: wrap; } }
-/* Phones: fade the right edge while more tabs remain offscreen. */
-.nav.more-right {
+/* Fade the right edge of any scroll strip while more remains offscreen. */
+.nav.more-right, .chips.more-right {
   -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent);
   mask-image: linear-gradient(90deg, #000 86%, transparent);
 }
@@ -261,6 +260,8 @@ a.card:hover { border-color: var(--ink-3); }
 .icon-btn {
   border: none; background: transparent; color: var(--ink-2); font-size: 15px;
   cursor: pointer; padding: 6px 8px; border-radius: 8px; line-height: 1;
+  min-width: 40px; min-height: 40px;      /* finger-sized hit area */
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
 
@@ -460,7 +461,9 @@ table.roster tr.clickable:hover td { background: var(--surface-2); }
 .seat-num { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 body.side-director .seat-num { background: var(--accent); color: var(--accent-ink); }
 .seat-item .grow { flex: 1; }
-.seat-item .seat-tools { display: flex; gap: 2px; }
+/* Extra space before the destructive ✕ so it can't be fat-fingered from ↓ */
+.seat-item .seat-tools { display: flex; gap: 4px; }
+.seat-item .seat-tools .icon-btn:last-child { margin-left: 10px; }
 .stage-strip { text-align: center; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink-3); border: 1px dashed var(--line); border-radius: 8px; padding: 5px; margin-bottom: 14px; }
 
 /* ---------- modal ---------- */
@@ -565,5 +568,7 @@ body.side-director .hero { background: linear-gradient(135deg, #191405 0%, #6d50
   .view { padding: 16px 12px 80px; }
   .topbar-inner { padding: 9px 12px 0; }
   .sched-time { min-width: 104px; font-size: 14px; }
-  .roll-btn { width: 36px; height: 34px; }
+  .roll-btn { width: 40px; height: 38px; }
+  /* 16px stops iOS Safari's zoom-on-focus lurch in every form */
+  .input, .select-native { font-size: 16px; }
 }

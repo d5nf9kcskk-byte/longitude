@@ -133,6 +133,19 @@ const Store = {
     for (const k of ['attendance', 'scheduleChanges']) {
       if (isObj(d[k])) for (const day of Object.keys(d[k])) { if (!isObj(d[k][day])) delete d[k][day]; }
     }
+    // …and one level deeper, so a corrupt group can never brick roll-taking
+    // or block-chip taps for that day.
+    if (isObj(d.attendance)) {
+      for (const day of Object.values(d.attendance)) {
+        for (const eid of Object.keys(day)) if (!isObj(day[eid])) delete day[eid];
+      }
+    }
+    if (isObj(d.scheduleChanges)) {
+      for (const rec of Object.values(d.scheduleChanges)) {
+        if (!isObj(rec.changes)) rec.changes = {};
+        for (const eid of Object.keys(rec.changes)) if (!isObj(rec.changes[eid])) delete rec.changes[eid];
+      }
+    }
     d.settings = Object.assign(this.defaults().settings, isObj(d.settings) ? d.settings : {});
     if (!Array.isArray(d.blocks) || d.blocks.length < 2) d.blocks = this.blocksDefault();
     if (!Array.isArray(d.ensembles) || !d.ensembles.length) d.ensembles = this.ensemblesDefault();
@@ -219,6 +232,15 @@ const Store = {
       const ok = v !== undefined && (kind === 'array' ? Array.isArray(v) : (v && typeof v === 'object' && !Array.isArray(v)));
       if (ok) base[key] = v;
     }
+    // Anything invalid gets dropped — but never silently (req: no vague or
+    // silent data-loss; the director is told exactly which sections fell back).
+    const dropped = [];
+    for (const [key, kind] of Object.entries(this.SECTION_KINDS)) {
+      const v = parsed[key];
+      if (v === undefined) continue;
+      const okv = kind === 'array' ? Array.isArray(v) : (v && typeof v === 'object' && !Array.isArray(v));
+      if (!okv) dropped.push(key);
+    }
     try {
       this.data = this.migrate(base);
     } catch (e) {
@@ -226,7 +248,10 @@ const Store = {
       return { ok: false, error: 'That backup contains unreadable entries and was not restored.' };
     }
     this.save();
-    return { ok: true };
+    if (dropped.length) {
+      this.loadIssues = dropped.map(k => `The backup's "${k}" section was unreadable and was not restored (everything else was). The previous data is under Settings → Recovery.`);
+    }
+    return { ok: true, dropped };
   },
 
   /* ---------- lookups ---------- */
@@ -328,17 +353,43 @@ const Store = {
     if (!Object.keys(a[date]).length) delete a[date];
     this.save();
   },
+  /* Only marks belonging to visible (non-archived, still-existing) students
+     count anywhere — an archived student leaves no phantom rolls behind. */
+  rollHasVisible(date, ensembleId) {
+    const g = (this.data.attendance[date] || {})[ensembleId];
+    return !!g && Object.keys(g).some(sid => this.isVisibleStudent(sid));
+  },
   rollDates(ensembleId) {
     return Object.keys(this.data.attendance)
-      .filter(d => !ensembleId || ensembleId === 'all' || this.data.attendance[d][ensembleId])
+      .filter(d => {
+        const day = this.data.attendance[d];
+        const eids = ensembleId && ensembleId !== 'all' ? [ensembleId] : Object.keys(day);
+        return eids.some(eid => this.rollHasVisible(d, eid));
+      })
       .sort();
   },
   rollSummary(date, ensembleId) {
     const out = { P: 0, A: 0, T: 0, E: 0, total: 0 };
     const day = this.data.attendance[date] || {};
     const groups = ensembleId && ensembleId !== 'all' ? [day[ensembleId] || {}] : Object.values(day);
-    for (const g of groups) for (const code of Object.values(g)) { if (out[code] != null) out[code]++; out.total++; }
+    for (const g of groups) {
+      for (const [sid, code] of Object.entries(g)) {
+        if (!this.isVisibleStudent(sid)) continue;
+        if (out[code] != null) out[code]++;
+        out.total++;
+      }
+    }
     return out;
+  },
+  /* Remove a whole day's roll for an ensemble — including marks left behind
+     by students who were archived or moved since. */
+  clearRoll(date, ensembleId) {
+    const a = this.data.attendance;
+    if (a[date]) {
+      delete a[date][ensembleId];
+      if (!Object.keys(a[date]).length) delete a[date];
+    }
+    this.save();
   },
 
   /* Roll roster for a date: active members, minus pull-outs covering the
@@ -547,7 +598,10 @@ const Store = {
       } else {
         const st = Object.assign({ id: U.uid(), status: 'active', createdAt: U.todayYmd() }, inc);
         this.data.students.push(st);
+        // Index new students under BOTH keys so a second row for the same
+        // person later in the same file updates instead of duplicating.
         index.set(this.matchKey(st), st);
+        index.set('nm:' + U.norm(st.first + ' ' + st.last), st);
         seen.add(st.id);
         report.added.push(st);
       }
@@ -575,7 +629,11 @@ const Store = {
 
   /* ---------- sample data (generic, fictional — repo is public) ---------- */
   loadSample() {
+    // Sample data replaces CONTENT only — the director's PIN, app identity,
+    // and preferences survive (wiping the PIN silently would reopen the panel).
+    const keepSettings = this.data ? this.data.settings : null;
     const d = this.defaults();
+    if (keepSettings) d.settings = Object.assign(d.settings, keepSettings);
     const mk = (first, last, grade, instrument, section, ens, extraContacts) => ({
       id: U.uid(), first, last, preferred: '', grade, instrument, section,
       ensembleIds: ens, email: U.norm(first) + '.' + U.norm(last) + '@example.org',
@@ -646,8 +704,10 @@ const Store = {
       { id: U.uid(), title: 'Practice log — week 2', details: 'Log 120 minutes across at least 4 days. Focus spots: measures 45–68 of the Schuman.', ensembleIds: ['sym'], due: U.addDays(t, 4), points: '10', link: '' },
       { id: U.uid(), title: 'Scale check: concert B-flat & F', details: 'Two octaves, quarter = 80, memorized. Sign up for a slot outside class or play during sectionals.', ensembleIds: ['we', 'cw'], due: U.addDays(t, 7), points: '20', link: '' },
     ];
-    d.settings.baseUrl = (typeof location !== 'undefined' && location.origin !== 'null')
-      ? location.origin + location.pathname : '';
+    if (!d.settings.baseUrl) {
+      d.settings.baseUrl = (typeof location !== 'undefined' && location.origin !== 'null')
+        ? location.origin + location.pathname : '';
+    }
     this.data = d;
     this.save();
   },

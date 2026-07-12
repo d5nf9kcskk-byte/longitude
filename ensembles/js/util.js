@@ -239,12 +239,40 @@ U.confirmBox = function (msg) { return window.confirm(msg); };
 U.openModal = function (title, bodyNode, opts) {
   opts = opts || {};
   U.closeModal();
+  U._modalOpener = document.activeElement;
   const root = document.getElementById('modal-root');
-  const box = U.el('div', { class: 'modal-box' + (opts.wide ? ' wide' : '') },
+  const box = U.el('div', {
+    class: 'modal-box' + (opts.wide ? ' wide' : ''),
+    role: 'dialog', 'aria-modal': 'true', 'aria-label': title,
+  },
     U.el('div', { class: 'modal-head' },
       U.el('div', { class: 'modal-title' }, title),
       U.el('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => U.closeModal() }, '✕')),
     U.el('div', { class: 'modal-body' }, bodyNode));
+
+  box.addEventListener('keydown', e => {
+    // Enter in a single-line field acts as "save" (textareas keep newlines).
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT' && !['checkbox', 'radio', 'file'].includes(e.target.type)) {
+      const primary = box.querySelector('.modal-body .btn.primary');
+      if (primary) { e.preventDefault(); primary.click(); }
+    }
+    // Keep Tab inside the dialog.
+    if (e.key === 'Tab') {
+      const focusables = Array.from(box.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(el => el.offsetParent !== null);
+      if (!focusables.length) return;
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  U._modalEsc = e => {
+    if (e.key === 'Escape' && !opts.sticky) { e.preventDefault(); U.closeModal(); }
+  };
+  document.addEventListener('keydown', U._modalEsc);
+
   root.innerHTML = '';
   root.appendChild(U.el('div', {
     class: 'modal-backdrop',
@@ -252,8 +280,13 @@ U.openModal = function (title, bodyNode, opts) {
   }, box));
   root.style.display = 'block';
   document.body.classList.add('modal-open');
-  const f = box.querySelector('input,select,textarea,button.primary');
-  if (f) setTimeout(() => f.focus(), 30);
+  if (!opts.noAutofocus) {
+    const f = box.querySelector('input,select,textarea,button.primary');
+    if (f) setTimeout(() => f.focus(), 30);
+  } else {
+    const c = box.querySelector('.modal-head .icon-btn');
+    if (c) setTimeout(() => c.focus(), 30);
+  }
   return box;
 };
 
@@ -261,6 +294,21 @@ U.closeModal = function () {
   const root = document.getElementById('modal-root');
   if (root) { root.innerHTML = ''; root.style.display = 'none'; }
   document.body.classList.remove('modal-open');
+  if (U._modalEsc) { document.removeEventListener('keydown', U._modalEsc); U._modalEsc = null; }
+  if (U._modalOpener && U._modalOpener.isConnected && U._modalOpener.focus) {
+    try { U._modalOpener.focus(); } catch (e) { /* ignore */ }
+  }
+  U._modalOpener = null;
+};
+
+/* Make any element keyboard-activatable (Enter/Space fire its onclick). */
+U.keyActivate = function (attrs) {
+  return Object.assign(attrs, {
+    tabindex: '0', role: 'button',
+    onkeydown: e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); }
+    },
+  });
 };
 
 /* ---------- form field helpers ---------- */
@@ -324,17 +372,19 @@ U.monthGrid = function (opts) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const dy = U.ymd(d);
     const inMonth = dy.slice(0, 7) === month;
+    const extra = opts.renderDay ? opts.renderDay(dy, inMonth) : null;
+    // Empty days are only interactive when the caller wants every day
+    // clickable (opts.pickAll, e.g. the schedule-change day picker) —
+    // otherwise a tap that does nothing is a lying affordance.
+    const interactive = !!opts.onPick && (opts.pickAll || !!extra);
     const cell = U.el('div', {
       class: 'mcal-cell' + (inMonth ? '' : ' out') + (dy === today ? ' today' : '') + (opts.selected === dy ? ' selected' : ''),
-      tabindex: opts.onPick ? '0' : null,
-      role: opts.onPick ? 'button' : null,
-      onclick: opts.onPick ? () => opts.onPick(dy) : null,
-      onkeydown: opts.onPick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onPick(dy); } } : null,
+      tabindex: interactive ? '0' : null,
+      role: interactive ? 'button' : null,
+      onclick: interactive ? () => opts.onPick(dy) : null,
+      onkeydown: interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); opts.onPick(dy); } } : null,
     }, U.el('div', { class: 'mcal-daynum' }, String(d.getDate())));
-    if (opts.renderDay) {
-      const extra = opts.renderDay(dy, inMonth);
-      if (extra) cell.appendChild(extra);
-    }
+    if (extra) cell.appendChild(extra);
     grid.appendChild(cell);
   }
   // Drop a trailing week that is entirely outside the month.
@@ -346,12 +396,24 @@ U.monthGrid = function (opts) {
   return wrap;
 };
 
-/* ---------- empty state ---------- */
-U.empty = function (icon, title, sub) {
+/* ---------- empty state (optional action node so users aren't given
+   instructions with nothing to tap) ---------- */
+U.empty = function (icon, title, sub, action) {
   return U.el('div', { class: 'empty' },
     U.el('div', { class: 'empty-icon' }, icon),
     U.el('div', { class: 'empty-title' }, title),
-    sub ? U.el('div', { class: 'empty-sub' }, sub) : null);
+    sub ? U.el('div', { class: 'empty-sub' }, sub) : null,
+    action ? U.el('div', { style: { marginTop: '14px' } }, action) : null);
+};
+
+/* Right-edge fade cue for horizontally scrollable strips (nav, chips). */
+U.scrollCue = function (el) {
+  const update = () => {
+    el.classList.toggle('more-right', el.scrollWidth - el.clientWidth - el.scrollLeft > 8);
+  };
+  el.addEventListener('scroll', update, { passive: true });
+  if (window.requestAnimationFrame) requestAnimationFrame(update); else setTimeout(update, 0);
+  return el;
 };
 
 /* ---------- CSV / TSV parsing (handles quoted fields) ---------- */

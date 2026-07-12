@@ -47,6 +47,9 @@ DSchedule.eventDialog = function (ev, onDone) {
         if (!title.value.trim()) { U.toast('Give the event a title', 'error'); return; }
         if (!date.value) { U.toast('Pick a date', 'error'); return; }
         if (endDate.value && endDate.value < date.value) { U.toast('Last day is before the first day', 'error'); return; }
+        if (endDate.value && endDate.value > U.addDays(date.value, 180)) {
+          U.toast('Multi-day events are capped at 180 days — split longer spans into separate events.', 'error'); return;
+        }
         const v = tagSel.querySelector('select').value;
         const tag = v === 'all' ? { type: 'all' } : { type: v.split(':')[0], id: v.split(':')[1] };
         const data = {
@@ -109,10 +112,15 @@ DSchedule.blockSwap = function (date, ensemble) {
 
 Views.director.schedule = function (container, arg) {
   const state = Views.director.schedule._state = Views.director.schedule._state || {};
-  if (arg && U.parseYmd(arg)) { state.date = arg; state.mode = 'day'; history.replaceState(null, '', '#/d/schedule'); }
-  state.mode = state.mode || 'day';
-  state.date = state.date || U.todayYmd();
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  if (arg && U.parseYmd(arg)) {
+    state.date = arg; state.mode = 'day';
+    history.replaceState(null, '', '#/d/schedule');
+  } else if (App.isFreshNav || !state.mode) {
+    // Fresh visits land on today's Day editor — the default.
+    state.mode = 'day';
+    state.date = U.todayYmd();
+    state.month = U.todayYmd().slice(0, 7);
+  }
   const blocks = Store.data.blocks;
 
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -322,8 +330,10 @@ DSchedule.customTimeDialog = function (date, ensemble) {
    ========================================================= */
 Views.director.temp = function (container) {
   const state = Views.director.temp._state = Views.director.temp._state || {};
-  state.mode = state.mode || 'list';
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  if (App.isFreshNav || !state.mode) {
+    state.mode = 'list';
+    state.month = U.todayYmd().slice(0, 7);
+  }
   const filter = Store.getFilter('d_temp', 'all');
 
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -337,7 +347,7 @@ Views.director.temp = function (container) {
   toolbar.appendChild(ensembleChips('d_temp', filter, () => App.render()));
   toolbar.appendChild(U.el('span', { class: 'grow' }));
   toolbar.appendChild(U.segmented(
-    [{ value: 'list', label: 'List' }, { value: 'month', label: 'Month' }],
+    [{ value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
     state.mode, v => { state.mode = v; App.render(); }));
   container.appendChild(toolbar);
 

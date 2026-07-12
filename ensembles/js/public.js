@@ -19,7 +19,7 @@ function ensembleChips(pageKey, value, onChange, opts) {
   }, color ? U.el('span', { class: 'swatch', style: { background: color } }) : null, label);
   if (opts.all !== false) wrap.appendChild(mk('all', opts.allLabel || 'All ensembles'));
   for (const e of Store.ensembles()) wrap.appendChild(mk(e.id, e.short || e.name, e.color));
-  return wrap;
+  return U.scrollCue(wrap);
 }
 
 function matchesEnsemble(itemEnsembleIds, filter) {
@@ -243,8 +243,9 @@ function calendarPage(container, opts) {
   opts = opts || {};
   const pageKey = opts.director ? 'd_calendar' : 'pub_calendar';
   const state = calendarPage._state = calendarPage._state || {};
-  state.month = state.month || U.todayYmd().slice(0, 7);
-  state.mode = state.mode || 'month';
+  // Fresh navigation always lands on this month's Month view (the ensemble
+  // filter is deliberately remembered — that's requirement 12/13's memory).
+  if (App.isFreshNav || !state.month) { state.month = U.todayYmd().slice(0, 7); state.mode = 'month'; }
   const filter = Store.getFilter(pageKey, 'all');
 
   const head = U.el('div', { class: 'page-head' },
@@ -280,9 +281,11 @@ function calendarPage(container, opts) {
     const color = tag.type === 'division' ? (Store.divisionById(tag.id) || {}).color
       : tag.type === 'ensemble' ? (Store.ensembleById(tag.id) || {}).color : '#b48c3c';
     const span = ev.endDate && ev.endDate > ev.date ? ev.endDate : ev.date;
-    for (let d = ev.date; d <= span; d = U.addDays(d, 1)) {
+    // 190-day guard only against corrupt/runaway ranges — the event dialog
+    // caps real input well below this, so no legitimate day ever drops off.
+    let d = ev.date;
+    for (let i = 0; d <= span && i < 190; i++, d = U.addDays(d, 1)) {
       items.push({ date: d, kind: 'event', title: ev.title, color: color || '#888', division: tag.type === 'division', item: ev });
-      if (d > U.addDays(ev.date, 60)) break; // guard against runaway ranges
     }
   }
   for (const con of Store.data.concerts) {
@@ -298,11 +301,13 @@ function calendarPage(container, opts) {
   const openDay = ymd => {
     const list = byDate.get(ymd) || [];
     const changed = Store.data.scheduleChanges[ymd];
-    if (!list.length && !changed) return;
+    const hasChangeInfo = changed && (Object.keys(changed.changes || {}).length || (changed.note || '').trim());
+    if (!list.length && !hasChangeInfo) return;
     const body = U.el('div');
-    if (changed && Object.keys(changed.changes || {}).length) {
+    if (hasChangeInfo) {
       body.appendChild(U.el('div', { class: 'card' },
-        U.el('div', { class: 'card-title' }, '🕐 Rehearsal times changed this day'),
+        U.el('div', { class: 'card-title' },
+          Object.keys(changed.changes || {}).length ? '🕐 Rehearsal times changed this day' : '📝 Note for this day'),
         U.el('div', { class: 'card-body' }, DSchedule.describeDay(ymd)),
         opts.director ? U.el('div', { class: 'card-actions' },
           U.el('a', { class: 'btn sm', href: '#/d/schedule/' + ymd, onclick: () => U.closeModal() }, 'Open in Schedule Changes')) : null));
@@ -338,10 +343,13 @@ function calendarPage(container, opts) {
       onPick: openDay,
       renderDay: ymd => {
         const list = byDate.get(ymd) || [];
-        const changed = !!(Store.data.scheduleChanges[ymd] && Object.keys(Store.data.scheduleChanges[ymd].changes || {}).length);
-        if (!list.length && !changed) return null;
+        const rec = Store.data.scheduleChanges[ymd];
+        const changed = !!(rec && Object.keys(rec.changes || {}).length);
+        const noteOnly = !!(rec && !changed && (rec.note || '').trim());
+        if (!list.length && !changed && !noteOnly) return null;
         const box = U.el('div');
         if (changed) box.appendChild(U.el('span', { class: 'mcal-evt', style: { '--tag-color': 'var(--gold)' } }, '🕐 time change'));
+        else if (noteOnly) box.appendChild(U.el('span', { class: 'mcal-evt', style: { '--tag-color': 'var(--gold)' } }, '📝 note'));
         list.slice(0, 3).forEach(it => box.appendChild(
           U.el('span', {
             class: 'mcal-evt' + (it.division ? ' division' : ''),
@@ -356,6 +364,8 @@ function calendarPage(container, opts) {
         return box;
       },
     }));
+    container.appendChild(U.el('div', { class: 'hint', style: { marginTop: '8px' } },
+      'Tap a day with items to see everything for that day.'));
     // Division legend, so the dashed labels are self-explanatory
     const legend = U.el('div', { class: 'toolbar', style: { marginTop: '10px' } },
       U.el('span', { class: 'hint' }, 'Also on this calendar:'),
@@ -375,7 +385,7 @@ function calendarPage(container, opts) {
       for (const d of dateList) {
         for (const it of byDate.get(d)) {
           const dp = U.parseYmd(d);
-          listWrap.appendChild(U.el('div', { class: 'rowitem clickable', onclick: () => openDay(d) },
+          listWrap.appendChild(U.el('div', U.keyActivate({ class: 'rowitem clickable', onclick: () => openDay(d) }),
             U.el('div', { class: 'date-pill' + (d < today ? ' past' : '') },
               U.el('div', { class: 'dp-mon' }, dp.toLocaleDateString('en-US', { month: 'short' })),
               U.el('div', { class: 'dp-day' }, String(dp.getDate()))),
@@ -403,8 +413,7 @@ function announcementsPage(container, opts) {
   opts = opts || {};
   const pageKey = opts.director ? 'd_news' : 'pub_news';
   const state = announcementsPage._state = announcementsPage._state || {};
-  state.mode = state.mode || 'list';
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  if (App.isFreshNav || !state.mode) { state.mode = 'list'; state.month = U.todayYmd().slice(0, 7); }
   const filter = Store.getFilter(pageKey, 'all');
 
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -420,7 +429,7 @@ function announcementsPage(container, opts) {
   toolbar.appendChild(ensembleChips(pageKey, filter, () => App.render()));
   toolbar.appendChild(U.el('span', { class: 'grow' }));
   toolbar.appendChild(U.segmented(
-    [{ value: 'list', label: 'List' }, { value: 'month', label: 'Month' }],
+    [{ value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
     state.mode, v => { state.mode = v; App.render(); }));
   container.appendChild(toolbar);
 
@@ -469,8 +478,7 @@ function assignmentsPage(container, opts) {
   opts = opts || {};
   const pageKey = opts.director ? 'd_assignments' : 'pub_assignments';
   const state = assignmentsPage._state = assignmentsPage._state || {};
-  state.mode = state.mode || 'list';
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  if (App.isFreshNav || !state.mode) { state.mode = 'list'; state.month = U.todayYmd().slice(0, 7); }
   const filter = Store.getFilter(pageKey, 'all');
 
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -484,7 +492,7 @@ function assignmentsPage(container, opts) {
   toolbar.appendChild(ensembleChips(pageKey, filter, () => App.render()));
   toolbar.appendChild(U.el('span', { class: 'grow' }));
   toolbar.appendChild(U.segmented(
-    [{ value: 'list', label: 'List' }, { value: 'month', label: 'Month' }],
+    [{ value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
     state.mode, v => { state.mode = v; App.render(); }));
   container.appendChild(toolbar);
 
@@ -541,9 +549,7 @@ function repertoirePage(container, opts) {
   opts = opts || {};
   const pageKey = opts.director ? 'd_repertoire' : 'pub_repertoire';
   const state = repertoirePage._state = repertoirePage._state || {};
-  state.tab = state.tab || 'ensemble';
-  state.mode = state.mode || 'list';
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  if (App.isFreshNav || !state.tab) { state.tab = 'ensemble'; state.mode = 'list'; state.month = U.todayYmd().slice(0, 7); }
   const filter = Store.getFilter(pageKey, 'all');
 
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -563,7 +569,7 @@ function repertoirePage(container, opts) {
   if (state.tab === 'concert') {
     toolbar.appendChild(U.el('span', { class: 'grow' }));
     toolbar.appendChild(U.segmented(
-      [{ value: 'list', label: 'List' }, { value: 'month', label: 'Month' }],
+      [{ value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
       state.mode, v => { state.mode = v; App.render(); }));
   }
   container.appendChild(toolbar);
@@ -751,6 +757,16 @@ Views.public.today = function (container) {
   if (upcoming.length) {
     container.appendChild(U.el('div', { class: 'section-label' }, 'Coming up'));
     upcoming.sort((a, b) => a.date < b.date ? -1 : 1).forEach(u => container.appendChild(u.node));
+  }
+
+  // Brand-new hub: don't leave students staring at a lone hero card.
+  const nothingYet = !Store.data.announcements.length && !Store.data.assignments.length &&
+    !Store.data.events.length && !Store.data.concerts.length;
+  if (nothingYet) {
+    container.appendChild(U.el('div', { class: 'card', style: { marginTop: '16px' } },
+      U.el('div', { class: 'card-title' }, 'Nothing posted yet'),
+      U.el('div', { class: 'card-body' },
+        'Announcements, assignments, concerts and events will appear here as soon as a director posts them.')));
   }
 };
 

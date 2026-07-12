@@ -207,6 +207,7 @@ DContent.concertDialog = function (c) {
         if (isNew) Store.data.concerts.push(data);
         else Object.assign(c, data);
         Store.save(); U.closeModal(); App.render();
+        U.toast(isNew ? 'Concert created' : 'Concert updated');
       },
     }, isNew ? 'Create concert' : 'Save concert'),
     U.el('button', { class: 'btn ghost', onclick: () => U.closeModal() }, 'Cancel')));
@@ -599,7 +600,7 @@ Views.director.settings = function (container) {
     U.el('button', {
       class: 'btn',
       onclick: () => {
-        if (!U.confirmBox('Load the demo data? This replaces what\'s currently on this device (a recovery copy of the old data is kept).')) return;
+        if (!U.confirmBox('Load the demo data? This replaces the CONTENT currently on this device (a recovery copy is kept). Your settings and director PIN are not touched.')) return;
         Store.stashRecovery(localStorage.getItem(Store.KEY) || '');
         Store.loadSample(); App.render();
         U.toast('Sample data loaded — explore both sides');

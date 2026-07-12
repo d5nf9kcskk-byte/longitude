@@ -113,11 +113,7 @@ const App = {
     }
 
     // Phones: cue that the nav scrolls while tabs remain offscreen.
-    const updateNavCue = () => {
-      nav.classList.toggle('more-right', nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8);
-    };
-    nav.addEventListener('scroll', updateNavCue, { passive: true });
-    requestAnimationFrame(updateNavCue);
+    U.scrollCue(nav);
 
     chrome.appendChild(U.el('header', { class: 'topbar' },
       U.el('div', { class: 'topbar-inner' },
@@ -137,18 +133,29 @@ const App = {
     const root = document.getElementById('issue-root');
     root.innerHTML = '';
     if (!Store.loadIssues.length || this._issuesDismissed) return;
-    const inner = U.el('div', { class: 'issue-banner-inner' },
-      U.el('b', null, 'Heads up — part of your saved data could not be read.'),
-      U.el('ul', null, Store.loadIssues.map(i => U.el('li', null, i))),
-      U.el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
-        U.el('button', {
-          class: 'btn sm',
-          onclick: () => { U.download('nwsa-music-recovery.json', Store.exportJson()); },
-        }, 'Download current data'),
+    const isDir = this.route().side === 'director';
+    // Students get one neutral line; the actionable detail belongs to the
+    // director (recovery lives in the Director Panel).
+    const inner = isDir
+      ? U.el('div', { class: 'issue-banner-inner' },
+        U.el('b', null, 'Heads up — part of your saved data could not be read.'),
+        U.el('ul', null, Store.loadIssues.map(i => U.el('li', null, i))),
+        U.el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+          U.el('button', {
+            class: 'btn sm',
+            onclick: () => { U.download('nwsa-music-recovery.json', Store.exportJson()); },
+          }, 'Download current data'),
+          U.el('a', { class: 'btn sm', href: '#/d/settings' }, 'Open Settings → Recovery'),
+          U.el('button', {
+            class: 'btn sm ghost',
+            onclick: () => { this._issuesDismissed = true; this.renderIssues(); },
+          }, 'Dismiss')))
+      : U.el('div', { class: 'issue-banner-inner' },
+        'Some saved info on this device could not be read — a director can restore it from Director Panel → Settings. ',
         U.el('button', {
           class: 'btn sm ghost',
           onclick: () => { this._issuesDismissed = true; this.renderIssues(); },
-        }, 'Dismiss')));
+        }, 'Dismiss'));
     root.appendChild(U.el('div', { class: 'issue-banner' }, inner));
   },
 

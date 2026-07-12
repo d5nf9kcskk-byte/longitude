@@ -11,6 +11,25 @@ Views.director.home = function (container) {
   const today = U.todayYmd();
   container.appendChild(Cards.scheduleHero('Today at a glance'));
 
+  // First run: a real path in, instead of a dashboard of zeros.
+  if (!Store.data.students.length) {
+    container.appendChild(U.el('div', { class: 'card', style: { marginTop: '16px' } },
+      U.el('div', { class: 'card-title' }, '👋 Welcome — let\'s set up your hub'),
+      U.el('div', { class: 'card-body' },
+        'Start with your roster: import the school\'s spreadsheet (every column is kept — all parents, emails, phones), or add students by hand. Prefer to look around first? Load the sample data and explore both sides; your settings and PIN are kept.'),
+      U.el('div', { class: 'card-actions' },
+        U.el('button', { class: 'btn primary', onclick: () => DRoster.importDialog() }, '⇪ Import roster spreadsheet'),
+        U.el('a', { class: 'btn', href: '#/d/roster' }, '+ Add students by hand'),
+        U.el('button', {
+          class: 'btn ghost',
+          onclick: () => {
+            Store.stashRecovery(localStorage.getItem(Store.KEY) || '');
+            Store.loadSample(); App.render();
+            U.toast('Sample data loaded — explore both sides');
+          },
+        }, 'Load sample data'))));
+  }
+
   // quick stats
   const out = Store.outOn(today);
   const outCount = out.manual.length + out.pulls.length + out.absent.length;
@@ -88,7 +107,7 @@ Views.director.roster = function (container) {
       U.el('th', null, 'Contacts'))));
     const tb = U.el('tbody');
     for (const st of students) {
-      tb.appendChild(U.el('tr', { class: 'clickable', onclick: () => DRoster.studentDetail(st.id) },
+      tb.appendChild(U.el('tr', U.keyActivate({ class: 'clickable', onclick: () => DRoster.studentDetail(st.id) }),
         U.el('td', null, U.el('b', null, st.last + ', ' + (st.preferred || st.first))),
         U.el('td', null, archived ? (st.archivedLabel || st.archivedAt || '—') : (st.grade || '—')),
         U.el('td', null, [st.instrument, st.section].filter(Boolean).join(' · ') || '—'),
@@ -200,7 +219,9 @@ DRoster.studentDetail = function (id) {
   }
   body.appendChild(actions);
 
-  U.openModal(st.first + ' ' + st.last, body, { wide: true });
+  // noAutofocus: focusing the Notes textarea would pop the phone keyboard
+  // over the contact info the director opened this card to read.
+  U.openModal(st.first + ' ' + st.last, body, { wide: true, noAutofocus: true });
 };
 
 DRoster.removeStudentEverywhere = function (id) {
@@ -209,7 +230,13 @@ DRoster.removeStudentEverywhere = function (id) {
   for (const chart of d.seatingCharts) for (const sec of chart.sections) sec.seatIds = sec.seatIds.filter(x => x !== id);
   d.whosOut = d.whosOut.filter(w => w.studentId !== id);
   d.tempChanges = d.tempChanges.filter(t => t.studentId !== id);
-  for (const day of Object.values(d.attendance)) for (const ens of Object.values(day)) delete ens[id];
+  for (const [dateKey, day] of Object.entries(d.attendance)) {
+    for (const [eid, marks] of Object.entries(day)) {
+      delete marks[id];
+      if (!Object.keys(marks).length) delete day[eid];   // no phantom roll days
+    }
+    if (!Object.keys(day).length) delete d.attendance[dateKey];
+  }
   Store.save();
 };
 
@@ -446,7 +473,9 @@ DRoster.mappingDialog = function (rows) {
     }, 'Import ' + (rows.length - 1) + ' rows'),
     U.el('button', { class: 'btn ghost', onclick: () => U.closeModal() }, 'Cancel')));
 
-  U.openModal('Check columns', body, { wide: true, sticky: true });
+  // noAutofocus: focusing a <select> inside the scrollable table would yank
+  // it sideways past the "Your column / Example" columns on phones.
+  U.openModal('Check columns', body, { wide: true, sticky: true, noAutofocus: true });
 };
 
 DRoster.importReport = function (report) {
@@ -490,9 +519,13 @@ DRoster.importReport = function (report) {
    ========================================================= */
 Views.director.roll = function (container) {
   const state = Views.director.roll._state = Views.director.roll._state || {};
-  state.mode = state.mode || 'day';
-  state.date = state.date || U.todayYmd();
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  // Every fresh visit starts on today's Day view — the required default —
+  // while same-page re-renders (marking, sorting) keep their place.
+  if (App.isFreshNav || !state.mode) {
+    state.mode = 'day';
+    state.date = U.todayYmd();
+    state.month = U.todayYmd().slice(0, 7);
+  }
   const ensembles = Store.ensembles();
   let eid = Store.getFilter('d_roll', ensembles[0] && ensembles[0].id);
   if (eid === 'all' || !Store.ensembleById(eid)) eid = ensembles[0] && ensembles[0].id;
@@ -511,27 +544,33 @@ Views.director.roll = function (container) {
     [{ value: 'day', label: 'Day' }, { value: 'month', label: 'Month' }, { value: 'list', label: 'List' }],
     state.mode, v => { state.mode = v; App.render(); }));
   toolbar.appendChild(U.el('span', { class: 'grow' }));
-  toolbar.appendChild(U.el('span', { class: 'toolbar-label' }, 'Sort:'));
-  toolbar.appendChild(U.segmented(
-    [{ value: 'last', label: 'Last name' }, { value: 'score', label: 'Score order' }],
-    sort, v => { Store.data.settings.rollSort = v; Store.save(); App.render(); }));
+  // Label + control wrap as ONE unit so "Sort:" never orphans on small screens.
+  toolbar.appendChild(U.el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '10px', flex: 'none' } },
+    U.el('span', { class: 'toolbar-label' }, 'Sort:'),
+    U.segmented(
+      [{ value: 'last', label: 'Last name' }, { value: 'score', label: 'Score order' }],
+      sort, v => { Store.data.settings.rollSort = v; Store.save(); App.render(); })));
   container.appendChild(toolbar);
 
   if (!eid) { container.appendChild(U.empty('🎺', 'No ensembles configured')); return; }
 
   if (state.mode === 'day') {
-    // date navigation
+    // date navigation (arrows + a real date picker, like Schedule Changes)
+    const dateInput = U.input({ type: 'date', value: state.date, style: { maxWidth: '165px' }, 'aria-label': 'Roll date' });
+    dateInput.addEventListener('change', () => { if (dateInput.value) { state.date = dateInput.value; App.render(); } });
     const nav = U.el('div', { class: 'toolbar' },
-      U.el('button', { class: 'btn sm', onclick: () => { state.date = U.addDays(state.date, -1); App.render(); } }, '‹'),
-      U.el('b', { style: { fontSize: '15px' } }, U.relDate(state.date) + ' — ' + U.fmtDate(state.date, 'long')),
-      U.el('button', { class: 'btn sm', onclick: () => { state.date = U.addDays(state.date, 1); App.render(); } }, '›'),
+      U.el('button', { class: 'btn sm', 'aria-label': 'Previous day', onclick: () => { state.date = U.addDays(state.date, -1); App.render(); } }, '‹'),
+      dateInput,
+      U.el('button', { class: 'btn sm', 'aria-label': 'Next day', onclick: () => { state.date = U.addDays(state.date, 1); App.render(); } }, '›'),
+      U.el('b', { style: { fontSize: '14px' } }, U.relDate(state.date)),
       state.date !== U.todayYmd() ? U.el('button', { class: 'btn sm ghost', onclick: () => { state.date = U.todayYmd(); App.render(); } }, 'Jump to today') : null);
     container.appendChild(nav);
 
     const { students, subInIds, pulledIds } = Store.rosterOn(state.date, eid);
     if (!students.length) {
       container.appendChild(U.empty('🧑‍🎓', 'No active students in this ensemble',
-        'Add students in the Roster (archived students never appear here).'));
+        'Archived students never appear here.',
+        U.el('a', { class: 'btn primary', href: '#/d/roster' }, 'Open the Roster to add students')));
       return;
     }
     if (subInIds.size || pulledIds.size) {
@@ -570,7 +609,9 @@ Views.director.roll = function (container) {
         class: 'btn sm ghost',
         onclick: () => {
           if (!U.confirmBox('Clear this day\'s roll for ' + (Store.ensembleById(eid) || {}).name + '?')) return;
-          for (const st of students) Store.setRollMark(state.date, eid, st.id, null);
+          // Clears the STORED day, so marks from since-archived students
+          // can't linger as phantom counts.
+          Store.clearRoll(state.date, eid);
           App.render();
         },
       }, 'Clear day')));
@@ -620,10 +661,10 @@ Views.director.roll = function (container) {
     container.appendChild(U.monthGrid({
       month: state.month,
       onNav: m => { state.month = m; App.render(); },
+      pickAll: true,   // any day opens the day view to take/see that roll
       onPick: ymd => { state.date = ymd; state.mode = 'day'; App.render(); },
       renderDay: ymd => {
-        const day = Store.data.attendance[ymd];
-        if (!day || !day[eid]) return null;
+        if (!Store.rollHasVisible(ymd, eid)) return null;
         const s = Store.rollSummary(ymd, eid);
         const box = U.el('div');
         box.appendChild(U.el('span', { class: 'mcal-evt', style: { '--tag-color': (Store.ensembleById(eid) || {}).color } },
@@ -638,17 +679,21 @@ Views.director.roll = function (container) {
     // list of days with rolls
     const dates = Store.rollDates(eid).reverse();
     if (!dates.length) {
-      container.appendChild(U.empty('📋', 'No rolls saved yet for this ensemble', 'Take today\'s roll in the Day view — it saves as you tap.'));
+      container.appendChild(U.empty('📋', 'No rolls saved yet for this ensemble', 'It saves as you tap.',
+        U.el('button', {
+          class: 'btn primary',
+          onclick: () => { state.mode = 'day'; state.date = U.todayYmd(); App.render(); },
+        }, "Take today's roll")));
       return;
     }
     const listWrap = U.el('div', { class: 'rowlist' });
     for (const d of dates) {
       const s = Store.rollSummary(d, eid);
       const dp = U.parseYmd(d);
-      listWrap.appendChild(U.el('div', {
+      listWrap.appendChild(U.el('div', U.keyActivate({
         class: 'rowitem clickable',
         onclick: () => { state.date = d; state.mode = 'day'; App.render(); },
-      },
+      }),
         U.el('div', { class: 'date-pill' + (d < U.todayYmd() ? ' past' : '') },
           U.el('div', { class: 'dp-mon' }, dp.toLocaleDateString('en-US', { month: 'short' })),
           U.el('div', { class: 'dp-day' }, String(dp.getDate()))),
@@ -670,8 +715,11 @@ Views.director.roll = function (container) {
    ========================================================= */
 Views.director.out = function (container) {
   const state = Views.director.out._state = Views.director.out._state || {};
-  state.mode = state.mode || 'today';
-  state.month = state.month || U.todayYmd().slice(0, 7);
+  // Fresh visits always land on Today — the required default.
+  if (App.isFreshNav || !state.mode) {
+    state.mode = 'today';
+    state.month = U.todayYmd().slice(0, 7);
+  }
 
   container.appendChild(U.el('div', { class: 'page-head' },
     U.el('div', null,
@@ -743,7 +791,8 @@ Views.director.out = function (container) {
     } else container.appendChild(U.el('div', { class: 'hint' }, 'No absences marked at roll yet today.'));
 
   } else if (state.mode === 'month') {
-    container.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '8px' } }, 'Tap a day to see who\'s out.'));
+    container.appendChild(U.el('div', { class: 'hint', style: { marginBottom: '8px' } },
+      'Dots mark planned absences and pull-outs. Tap a day to see everyone out that day (including roll absences).'));
     container.appendChild(U.monthGrid({
       month: state.month,
       onNav: m => { state.month = m; App.render(); },
@@ -770,12 +819,16 @@ Views.director.out = function (container) {
         U.openModal("Who's out — " + U.fmtDate(ymd, 'long'), body, { wide: true });
       },
       renderDay: ymd => {
+        // Dots = planned outages (marked-out + pull-outs) — the same set the
+        // List view shows, so nothing "vanishes" between the two views.
+        // (Roll absences still appear in the tapped day's detail.)
         const o = Store.outOn(ymd);
-        const n = o.manual.length + o.pulls.length + o.absent.length;
-        if (!n) return null;
+        const n = o.manual.length + o.pulls.length;
+        if (!n && !o.absent.length) return null;
         const dots = U.el('div', { class: 'mcal-dots' });
         for (let i = 0; i < Math.min(n, 6); i++) dots.appendChild(U.el('span', { class: 'mcal-dot', style: { '--tag-color': 'var(--absent)' } }));
         if (n > 6) dots.appendChild(U.el('span', { class: 'mcal-more' }, '+' + (n - 6)));
+        if (!n && o.absent.length) dots.appendChild(U.el('span', { class: 'mcal-more' }, o.absent.length + ' at roll'));
         return dots;
       },
     }));
