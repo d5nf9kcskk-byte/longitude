@@ -404,7 +404,7 @@ function calendarPage(container, opts) {
                 (it.item.time ? ' · ' + U.fmtTimeRange(it.item.time, it.item.endTime) : '') +
                 (it.item.location || it.item.venue ? ' · ' + (it.item.location || it.item.venue) : ''))),
             it.kind === 'concert' ? U.el('span', { class: 'tag', style: { '--tag-color': 'var(--gold)' } }, 'Concert')
-              : (it.division ? Cards.tagFor(it.item.tag) : Cards.tagFor(it.item.tag))));
+              : Cards.tagFor(it.item.tag)));
         }
       }
     };
@@ -451,7 +451,12 @@ function announcementsPage(container, opts) {
     onEdit: a => DContent.announcementDialog(a),
     // closeModal first: these can fire inside a month-day dialog, which
     // would otherwise keep showing the stale card after the change.
-    onPin: a => { a.pinned = !a.pinned; Store.save(); U.closeModal(); App.render(); },
+    // Re-resolve by id — the captured ref can be stale after a cross-tab reload.
+    onPin: a => {
+      const live = Store.data.announcements.find(x => x.id === a.id);
+      if (live) { live.pinned = !live.pinned; Store.save(); }
+      U.closeModal(); App.render();
+    },
     onDelete: a => {
       if (!U.confirmBox('Delete announcement "' + a.title + '"?')) return;
       Store.data.announcements = Store.data.announcements.filter(x => x.id !== a.id);

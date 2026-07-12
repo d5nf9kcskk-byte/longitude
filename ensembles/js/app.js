@@ -69,7 +69,10 @@ const App = {
     this.isFreshNav = routeKey !== this._lastRouteKey;
     this._lastRouteKey = routeKey;
 
-    document.body.className = 'side-' + (r.side === 'director' ? 'director' : 'public');
+    // classList, not className — wholesale assignment would strip modal-open
+    // (scroll lock) when a storage-triggered re-render happens under a modal.
+    document.body.classList.remove('side-public', 'side-director');
+    document.body.classList.add('side-' + (r.side === 'director' ? 'director' : 'public'));
     this.renderChrome(r, gated);
     this.renderIssues();
     this.renderFooter(r);

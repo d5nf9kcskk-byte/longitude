@@ -562,8 +562,8 @@ Views.director.settings = function (container) {
     'The two school blocks power the one-tap buttons in Schedule Changes.'));
   for (const b of Store.data.blocks) {
     const liveBlock = () => Store.data.blocks.find(x => x.id === b.id) || b;
-    const st = U.input({ type: 'time', value: b.start, onchange: e => { const lb = liveBlock(); lb.start = e.target.value || lb.start; Store.save(); App.render(); } });
-    const en = U.input({ type: 'time', value: b.end, onchange: e => { const lb = liveBlock(); lb.end = e.target.value || lb.end; Store.save(); App.render(); } });
+    const st = U.input({ type: 'time', value: b.start, onchange: e => { const lb = liveBlock(); lb.start = e.target.value || lb.start; Store.cleanupNoopOverrides(); App.render(); } });
+    const en = U.input({ type: 'time', value: b.end, onchange: e => { const lb = liveBlock(); lb.end = e.target.value || lb.end; Store.cleanupNoopOverrides(); App.render(); } });
     blocksCard.appendChild(U.el('div', { class: 'field-row', style: { marginTop: '8px', alignItems: 'center' } },
       U.el('b', { style: { flex: '0 0 80px' } }, b.label), st, en));
   }
@@ -572,7 +572,7 @@ Views.director.settings = function (container) {
     const sel = U.select(Store.data.blocks.map(b => ({ value: b.id, label: b.label + ' · ' + U.fmtTimeRange(b.start, b.end) })),
       e.blockId, v => {
         const live = Store.ensembleById(e.id);
-        if (live) { live.blockId = v; Store.save(); App.render(); }
+        if (live) { live.blockId = v; Store.cleanupNoopOverrides(); App.render(); }
       }, { id: 'block-sel-' + e.id });
     blocksCard.appendChild(U.el('div', { class: 'field-row', style: { marginTop: '8px', alignItems: 'center' } },
       U.el('b', { style: { flex: '1' } }, e.name), sel));

@@ -231,6 +231,12 @@ const Store = {
       const v = parsed[key];
       const ok = v !== undefined && (kind === 'array' ? Array.isArray(v) : (v && typeof v === 'object' && !Array.isArray(v)));
       if (ok) base[key] = v;
+      else if (v === undefined && this.data && this.data[key] !== undefined) {
+        // Section absent from the backup (partial/hand-edited file): keep
+        // what's on the device rather than resetting to defaults — this is
+        // what protects the PIN and block setup from a content-only file.
+        base[key] = this.data[key];
+      }
     }
     // Anything invalid gets dropped — but never silently (req: no vague or
     // silent data-loss; the director is told exactly which sections fell back).
@@ -330,6 +336,25 @@ const Store = {
 
   makeDayNormal(date) {
     delete this.data.scheduleChanges[date];
+    this.save();
+  },
+
+  /* After block times or an ensemble's home block change in Settings, an old
+     override can become identical to the new normal time — sweep those so
+     days don't stay marked "changed" for no visible reason. */
+  cleanupNoopOverrides() {
+    for (const [date, rec] of Object.entries(this.data.scheduleChanges)) {
+      for (const [eid, ch] of Object.entries(rec.changes || {})) {
+        if (!ch || ch.cancelled) continue;
+        const e = this.ensembleById(eid);
+        if (!e) { delete rec.changes[eid]; continue; }
+        const base = this.baseTimes(e);
+        if (ch.start === base.start && ch.end === base.end) delete rec.changes[eid];
+      }
+      if (!Object.keys(rec.changes || {}).length && !(rec.note || '').trim()) {
+        delete this.data.scheduleChanges[date];
+      }
+    }
     this.save();
   },
 
@@ -513,8 +538,10 @@ const Store = {
         case 'notes': st.notes = st.notes ? st.notes + '\n' + val : val; break;
         case 'full': {
           if (val.includes(',')) {
-            const [l, f] = val.split(',');
-            st.last = st.last || l.trim(); st.first = st.first || f.trim();
+            // split on the FIRST comma only — "Lopez, Maria, Jr" keeps its suffix
+            const idx = val.indexOf(',');
+            st.last = st.last || val.slice(0, idx).trim();
+            st.first = st.first || val.slice(idx + 1).trim();
           } else {
             const parts = val.split(/\s+/);
             st.first = st.first || parts.slice(0, -1).join(' ') || parts[0];

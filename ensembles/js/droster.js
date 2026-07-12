@@ -189,7 +189,16 @@ DRoster.studentDetail = function (id) {
   const actions = U.el('div', { class: 'card-actions' });
   actions.appendChild(U.el('button', {
     class: 'btn primary',
-    onclick: () => { st.notes = notes.value; Store.save(); U.toast('Notes saved'); },
+    onclick: () => {
+      // Re-resolve by id — a cross-tab reload may have swapped Store.data
+      // while this profile was open; writing to the captured ref would
+      // silently lose the note behind a success toast.
+      const live = Store.studentById(st.id);
+      if (!live) { U.toast('This student no longer exists on this device.', 'error'); return; }
+      live.notes = notes.value;
+      Store.save();
+      U.toast('Notes saved');
+    },
   }, 'Save notes'));
   actions.appendChild(U.el('button', { class: 'btn', onclick: () => { U.closeModal(); DRoster.studentDialog(st); } }, 'Edit'));
   if (st.status === 'archived') {
@@ -509,7 +518,9 @@ DRoster.importReport = function (report) {
     body.appendChild(U.el('hr', { class: 'divider' }));
     body.appendChild(U.el('div', { class: 'card-body' },
       U.el('b', null, report.notInFile.length + ' active students were NOT in this file'),
-      ' — usually last semester\'s graduates or transfers. You can move them to Archived · Alumni in one tap (info and notes kept):'));
+      ' — usually last semester\'s graduates or transfers. You can move them to Archived · Alumni in one tap (info and notes kept). ',
+      U.el('b', null, 'Only bulk-archive from a FULL roster file'),
+      ' — a single-ensemble file lists everyone from the other ensembles here too.'));
     const listEl = U.el('ul', { style: { margin: '8px 0 4px 18px', fontSize: '13.5px' } });
     for (const s of report.notInFile.slice(0, 30)) listEl.appendChild(U.el('li', null, s.last + ', ' + s.first + (s.grade ? ' (gr ' + s.grade + ')' : '')));
     if (report.notInFile.length > 30) listEl.appendChild(U.el('li', null, '…and ' + (report.notInFile.length - 30) + ' more'));
