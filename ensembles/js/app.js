@@ -76,7 +76,9 @@ const App = {
 
     const view = document.getElementById('view');
     view.innerHTML = '';
-    window.scrollTo(0, 0);
+    // Only jump to the top on real navigation — a same-page re-render (block
+    // chip tap, seat move) must not yank the user's scroll position away.
+    if (this.isFreshNav) window.scrollTo(0, 0);
 
     if (r.side === 'director' && gated) { this.renderGate(view); return; }
 

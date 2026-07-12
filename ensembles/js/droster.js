@@ -37,7 +37,7 @@ Views.director.home = function (container) {
   const changedUpcoming = Store.changedDates().filter(d => d >= today).length;
   const active = Store.activeStudents().length;
 
-  const stats = U.el('div', { class: 'grid-2' });
+  const stats = U.el('div', { class: 'grid-2', style: { gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' } });
   const stat = (to, big, label) => U.el('a', { class: 'card clickable', href: to, style: { textDecoration: 'none', color: 'inherit' } },
     U.el('div', { class: 'page-title' }, String(big)),
     U.el('div', { class: 'card-meta' }, label));

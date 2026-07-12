@@ -263,7 +263,7 @@ function calendarPage(container, opts) {
         ? 'Concerts, events and dates for every division — but only music ensembles are classes here.'
         : 'Every date that matters — rehearsals, concerts, and shared-stage events.')),
     opts.director ? U.el('div', { class: 'page-actions' },
-      U.el('button', { class: 'btn primary', onclick: () => DSchedule.eventDialog(null, () => App.render()) }, '+ Add event')) : null);
+      U.el('button', { class: 'btn primary', onclick: () => DSchedule.eventDialog(null, () => App.render()) }, '+ New event')) : null);
   container.appendChild(head);
 
   // toolbar: Show <dropdown with visible chevron> + view toggle
@@ -568,8 +568,8 @@ function repertoirePage(container, opts) {
       U.el('div', { class: 'page-title' }, 'Repertoire'),
       U.el('div', { class: 'page-sub' }, 'What each ensemble is playing — with parts and seating when applied.')),
     opts.director ? U.el('div', { class: 'page-actions' },
-      U.el('button', { class: 'btn', onclick: () => DContent.concertDialog(null) }, '+ Concert'),
-      U.el('button', { class: 'btn primary', onclick: () => DContent.pieceDialog(null) }, '+ Add piece')) : null));
+      U.el('button', { class: 'btn', onclick: () => DContent.concertDialog(null) }, '+ New concert'),
+      U.el('button', { class: 'btn primary', onclick: () => DContent.pieceDialog(null) }, '+ New piece')) : null));
 
   container.appendChild(U.el('div', { class: 'toolbar' },
     U.segmented([{ value: 'ensemble', label: 'By Ensemble' }, { value: 'concert', label: 'By Concert' }],
@@ -655,7 +655,7 @@ function renderConcertCard(con, filter, dirOpts, opts) {
           U.el('div', { class: 'row-title' }, p.title),
           U.el('div', { class: 'row-sub' }, p.composer + (p.arranger ? ' · ' + p.arranger : ''))),
         Cards.tagFor({ type: 'ensemble', id: p.ensembleId }),
-        U.el('a', { class: 'btn sm', href: (opts.director ? '#/d/repertoire/' : '#/repertoire/') + p.id }, 'Open')));
+        U.el('a', { class: 'btn sm', href: (opts.director ? '#/d/repertoire/' : '#/repertoire/') + p.id }, 'Details')));
     }
     card.appendChild(body);
   } else {

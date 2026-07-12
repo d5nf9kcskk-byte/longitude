@@ -34,7 +34,7 @@ DSchedule.eventDialog = function (ev, onDone) {
 
   body.appendChild(U.field('Event title', title));
   body.appendChild(U.el('div', { class: 'field-row' }, U.field('Date', date), U.field('Last day (optional)', endDate)));
-  body.appendChild(U.el('div', { class: 'field-row' }, U.field('Start time (optional)', time), U.field('End time', endTime)));
+  body.appendChild(U.el('div', { class: 'field-row' }, U.field('Start (optional)', time), U.field('End', endTime)));
   body.appendChild(U.field('Location', location));
   body.appendChild(U.field('Shows under', tagSel,
     'Dance / Theater / Visual Arts appear on the calendar as labels only — they never become ensembles or filters anywhere else.'));

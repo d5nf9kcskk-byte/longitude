@@ -25,7 +25,7 @@ body.side-public {
   --surface-2: #f1eee7;
   --ink: #191c21;
   --ink-2: #575d68;
-  --ink-3: #8a8f99;
+  --ink-3: #6b7078;   /* WCAG AA on the light background */
   --line: #e3ded2;
   --accent: #0e7a5f;
   --accent-ink: #ffffff;
@@ -43,7 +43,7 @@ body.side-director {
   --surface-2: #222834;
   --ink: #e9ecf1;
   --ink-2: #a7aeba;
-  --ink-3: #767d8a;
+  --ink-3: #8b93a1;   /* WCAG AA on the dark surfaces */
   --line: #2b3240;
   --accent: #d9a441;
   --accent-ink: #16130a;
@@ -222,10 +222,12 @@ body.side-director .chip.active { background: var(--accent); color: var(--accent
   font-size: 11.5px; font-weight: 750; letter-spacing: 0.02em;
   padding: 2.5px 9px; border-radius: 999px;
   background: color-mix(in srgb, var(--tag-color, #888) 16%, transparent);
-  color: var(--tag-color, #888);
+  /* text mixed toward ink so small colored labels clear AA on both themes */
+  color: color-mix(in srgb, var(--tag-color, #888) 55%, var(--ink));
   border: 1px solid color-mix(in srgb, var(--tag-color, #888) 38%, transparent);
   white-space: nowrap;
 }
+.tag::before, .mcal-dot, .chip .swatch { background: var(--tag-color, #888); }
 .tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--tag-color, #888); }
 .tag.division { border-style: dashed; }
 
@@ -297,7 +299,9 @@ body.side-director .seg-btn.active { background: var(--accent); color: var(--acc
 .field-label { display: block; font-size: 12px; font-weight: 750; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 5px; }
 .field-hint { display: block; font-size: 12px; color: var(--ink-3); margin-top: 4px; }
 .field-row { display: flex; gap: 10px; }
-.field-row > * { flex: 1; }
+.field-row > * { flex: 1; min-width: 0; }   /* time/date inputs must shrink, not overflow */
+.field-row .input { min-width: 0; width: 100%; }
+@media (max-width: 480px) { .field-row { flex-wrap: wrap; } .field-row > * { flex: 1 1 140px; } }
 
 /* Custom select: generous padding for the text plus an explicit chevron —
    nothing clipped, unmistakably a dropdown. */
@@ -321,6 +325,9 @@ body.side-director .seg-btn.active { background: var(--accent); color: var(--acc
   color: var(--ink-2); font-size: 12px;
 }
 .select-wrap.block, .select-wrap.block .select-native { width: 100%; }
+/* When flex stretches the wrap (e.g. inside .field-row), the native select
+   must fill it — otherwise the chevron floats detached at the far edge. */
+.select-wrap .select-native { width: 100%; }
 
 /* ---------- month calendar grid ---------- */
 .mcal { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -347,7 +354,7 @@ body.side-director .seg-btn.active { background: var(--accent); color: var(--acc
   display: block; font-size: 10.5px; font-weight: 700; line-height: 1.3;
   border-radius: 5px; padding: 1.5px 5px; margin-top: 2px;
   background: color-mix(in srgb, var(--tag-color, #888) 18%, transparent);
-  color: var(--tag-color, #888);
+  color: color-mix(in srgb, var(--tag-color, #888) 55%, var(--ink));
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .mcal-evt.division { border: 1px dashed color-mix(in srgb, var(--tag-color, #888) 55%, transparent); }
@@ -412,6 +419,13 @@ body.side-director .seg-btn.active { background: var(--accent); color: var(--acc
 .pill.A { color: var(--absent); border-color: color-mix(in srgb, var(--absent) 40%, transparent); }
 .pill.T { color: var(--tardy); border-color: color-mix(in srgb, var(--tardy) 40%, transparent); }
 .pill.E { color: var(--excused); border-color: color-mix(in srgb, var(--excused) 40%, transparent); }
+/* Brighter status text on the dark theme (the shared palette was tuned for
+   light surfaces and lands under AA on charcoal). Roll buttons keep the
+   original saturated fills — these overrides are text-only. */
+body.side-director .pill.P { color: #43cf90; }
+body.side-director .pill.A { color: #f07d7d; }
+body.side-director .pill.T { color: #ecb64a; }
+body.side-director .pill.E { color: #a89fff; }
 
 /* ---------- schedule ---------- */
 .sched-row {
@@ -523,10 +537,14 @@ body.side-director .hero { background: linear-gradient(135deg, #191405 0%, #6d50
 .hero .hero-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin: 2px 0 12px; }
 .hero-sched { display: flex; flex-direction: column; gap: 7px; }
 .hero-row {
-  display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.1);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 11px; padding: 8px 13px;
   font-size: 14px; font-weight: 650;
 }
+/* Badges on the saturated hero gradients need their own high-contrast look —
+   the tinted card-badge colors disappear against the gradient. */
+.hero .badge { background: rgba(0, 0, 0, 0.45); color: #fff; flex: none; white-space: nowrap; }
 .hero-row .ht { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 118px; }
 .hero-row .ht .was { display: block; font-size: 11px; opacity: 0.7; text-decoration: line-through; }
 .hero-row.cancelled { opacity: 0.72; }
@@ -543,6 +561,7 @@ body.side-director .hero { background: linear-gradient(135deg, #191405 0%, #6d50
 /* ---------- print: only the QR sheet ---------- */
 .qr-print-only { display: none; }
 @media print {
+  body.printing-qr { background: #fff !important; }
   body.printing-qr * { visibility: hidden !important; }
   body.printing-qr .qr-print-sheet, body.printing-qr .qr-print-sheet * { visibility: visible !important; }
   body.printing-qr .qr-print-sheet {
@@ -571,4 +590,8 @@ body.side-director .hero { background: linear-gradient(135deg, #191405 0%, #6d50
   .roll-btn { width: 40px; height: 38px; }
   /* 16px stops iOS Safari's zoom-on-focus lurch in every form */
   .input, .select-native { font-size: 16px; }
+}
+@media (max-width: 360px) {
+  .brandline { flex-wrap: wrap; }
+  .side-switch { font-size: 11.5px; padding: 4px 9px; }
 }
