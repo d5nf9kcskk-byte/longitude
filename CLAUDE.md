@@ -57,6 +57,17 @@ alongside `.github/workflows/deploy.yml` (two workflows deploying the
 same Pages site race each other). Its GitHub-sync data lands in `data/`,
 which the deploy trigger ignores.
 
+`ensembles/` is the NWSA Music Ensembles Hub — same companion-app rules
+(static, plain HTML/CSS/JS, ships at `/ensembles/`). Two sides in one
+app: a light student/family side, and a dark **Director Panel** behind
+`#/d/…` with an optional PIN. All real data (rosters, contacts, notes,
+attendance) lives in localStorage on the director's device only — the
+repo ships empty, with generic demo data behind a "Load sample data"
+button, and must stay that way. Music ensembles (Symphony, Wind
+Ensemble, Jazz, Chamber Winds) are the only "classes"; Dance/Theater/
+Visual Arts exist solely as calendar labels, never as ensembles or
+filters.
+
 ## AI Reader architecture
 
 The Schwarz Workbench's AI Reader never calls Anthropic from the browser.

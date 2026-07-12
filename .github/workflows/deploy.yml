@@ -47,6 +47,7 @@ jobs:
       - name: Include companion apps
         run: |
           [ -d score-study ] && cp -r score-study dist/score-study || true
+          [ -d ensembles ] && cp -r ensembles dist/ensembles || true
           [ -d data ] && cp -r data dist/data || true
 
       - uses: actions/configure-pages@v5
