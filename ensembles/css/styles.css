@@ -235,7 +235,13 @@ body.side-director .chip.active { background: var(--accent); color: var(--accent
   cursor: pointer;
   white-space: nowrap;
   transition: transform 60ms ease;
+  text-decoration: none;            /* .btn is sometimes an <a> */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+a.card { text-decoration: none; color: inherit; }
+a.card:hover { border-color: var(--ink-3); }
 .btn:hover { border-color: var(--ink-3); }
 .btn:active { transform: scale(0.97); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
