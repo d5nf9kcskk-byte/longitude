@@ -70,7 +70,7 @@ DContent.announcementDialog = function (a) {
         if (isNew) Store.data.announcements.unshift(data);
         else Object.assign(a, data);
         Store.save(); U.closeModal(); App.render();
-        U.toast(isNew ? 'Announcement posted — live on the student side' : 'Announcement updated');
+        U.toast(isNew ? 'Announcement posted — it\'s on the student side of this hub now' : 'Announcement updated');
       },
     }, isNew ? 'Post announcement' : 'Save changes'),
     U.el('button', { class: 'btn ghost', onclick: () => U.closeModal() }, 'Cancel')));
@@ -102,6 +102,7 @@ DContent.assignmentDialog = function (a) {
         if (!title.value.trim()) { U.toast('Give it a title', 'error'); return; }
         if (!due.value) { U.toast('Pick a due date', 'error'); return; }
         const ids = picker.value();
+        if (ids !== 'all' && !ids.length) { U.toast('Pick at least one ensemble, or check "All ensembles".', 'error'); return; }
         const data = {
           id: a ? a.id : U.uid(),
           title: title.value.trim(), details: details.value.trim(),
@@ -196,6 +197,7 @@ DContent.concertDialog = function (c) {
       onclick: () => {
         if (!title.value.trim() || !date.value) { U.toast('Title and date are required', 'error'); return; }
         const ids = picker.value();
+        if (ids !== 'all' && !ids.length) { U.toast('Pick at least one ensemble, or check "All ensembles".', 'error'); return; }
         const data = {
           id: c ? c.id : U.uid(),
           title: title.value.trim(), date: date.value, time: time.value || '',
@@ -277,7 +279,9 @@ DContent.seatingDetail = function (container, id) {
     return;
   }
   const state = DContent.seatingDetail._state = DContent.seatingDetail._state || {};
-  if (state.forId !== id) { state.forId = id; state.editing = false; }
+  // Student view first on every NAVIGATION here (App.isFreshNav) — but not on
+  // same-page re-renders, or every seat edit would kick us out of edit mode.
+  if (state.forId !== id || App.isFreshNav) { state.forId = id; state.editing = false; }
 
   const e = Store.ensembleById(chart.ensembleId);
   container.appendChild(U.el('div', { class: 'page-head' },
@@ -320,9 +324,13 @@ DContent.seatingDetail = function (container, id) {
     const list = U.el('div', { class: 'seat-list' });
     sec.seatIds.forEach((sid, i) => {
       const st = Store.studentById(sid);
+      const label = !st ? '(removed student)'
+        : st.status === 'archived'
+          ? st.last + ', ' + (st.preferred || st.first) + ' · archived — students see an open seat'
+          : st.last + ', ' + (st.preferred || st.first) + (st.instrument ? ' · ' + st.instrument : '');
       list.appendChild(U.el('div', { class: 'seat-item' },
         U.el('span', { class: 'seat-num' }, String(i + 1)),
-        U.el('span', { class: 'grow' }, st ? (st.last + ', ' + (st.preferred || st.first) + (st.instrument ? ' · ' + st.instrument : '')) : '(removed student)'),
+        U.el('span', { class: 'grow' }, label),
         U.el('span', { class: 'seat-tools' },
           U.el('button', { class: 'icon-btn', title: 'Move up', onclick: () => { if (i > 0) { sec.seatIds.splice(i, 1); sec.seatIds.splice(i - 1, 0, sid); touch(); } } }, '↑'),
           U.el('button', { class: 'icon-btn', title: 'Move down', onclick: () => { if (i < sec.seatIds.length - 1) { sec.seatIds.splice(i, 1); sec.seatIds.splice(i + 1, 0, sid); touch(); } } }, '↓'),
@@ -390,7 +398,9 @@ DContent.chartDialog = function () {
         const preset = eid === 'jazz' ? JAZZ_SECTIONS : (eid === 'we' || eid === 'cw') ? BAND_SECTIONS : ORCHESTRA_SECTIONS;
         const chart = {
           id: U.uid(), name: name.value.trim(), ensembleId: eid, updated: U.todayYmd(),
-          sections: preset.slice(0, eid === 'jazz' ? 9 : 8).map(n => ({ name: n, seatIds: [] })),
+          // Seed the whole instrumentation — empty sections are cheap to
+          // delete, missing brass/percussion is annoying to rebuild.
+          sections: preset.map(n => ({ name: n, seatIds: [] })),
         };
         Store.data.seatingCharts.push(chart);
         Store.save(); U.closeModal();
@@ -470,7 +480,11 @@ Views.director.qr = function (container) {
   });
   container.appendChild(U.el('div', { class: 'card', style: { marginBottom: '14px' } },
     U.field('App address the codes point to', urlField,
-      'Auto-filled from where the app is running. Change it if you post the hub somewhere else.')));
+      'Auto-filled from where the app is running. Change it if you post the hub somewhere else.'),
+    U.el('div', { class: 'hint' },
+      'Heads-up: this hub stores its content per device/browser (see Settings → Your data). ',
+      'Students scanning a code see the hub at that address with whatever data lives there — ',
+      'so keep the posted address pointed at the copy you actually maintain.')));
 
   const targets = [{ name: (s.appName || 'NWSA Music') + ' — Student Hub', url: base, sub: 'Today\'s schedule, announcements, assignments, repertoire' }]
     .concat(Store.ensembles().map(e => ({

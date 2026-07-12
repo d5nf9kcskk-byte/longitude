@@ -138,28 +138,74 @@ Cards.piece = function (p, opts) {
   return card;
 };
 
-/* ---------- seating chart, student-facing (read-only) ---------- */
+/* ---------- seating chart, student-facing (read-only) ----------
+   Archived students are invisible app-wide: their seats render as open so
+   nothing about them surfaces here (their id stays stored, so restoring the
+   student puts them right back in their seat). */
 Cards.seatingView = function (chart) {
   const wrap = U.el('div');
   wrap.appendChild(U.el('div', { class: 'stage-strip' }, 'Stage / Conductor'));
   for (const sec of chart.sections) {
+    const visible = sec.seatIds.filter(sid => Store.isVisibleStudent(sid));
     const secEl = U.el('div', { class: 'seat-section' });
     secEl.appendChild(U.el('div', { class: 'seat-sec-title' }, sec.name,
       U.el('span', { class: 'hint', style: { textTransform: 'none', letterSpacing: '0' } },
-        U.plural(sec.seatIds.length, 'seat'))));
+        U.plural(visible.length, 'seat'))));
     const list = U.el('div', { class: 'seat-list' });
     sec.seatIds.forEach((sid, i) => {
-      const st = Store.studentById(sid);
+      const show = Store.isVisibleStudent(sid);
       list.appendChild(U.el('div', { class: 'seat-item' },
         U.el('span', { class: 'seat-num' }, String(i + 1)),
-        U.el('span', { class: 'grow' }, st ? Store.studentName(sid) : '(open seat)'),
-        i === 0 ? U.el('span', { class: 'hint' }, sec.name.toLowerCase().startsWith('violin 1') ? 'concertmaster' : 'principal') : null));
+        U.el('span', { class: 'grow' }, show ? Store.studentName(sid) : '(open seat)'),
+        i === 0 && show ? U.el('span', { class: 'hint' }, sec.name.toLowerCase().startsWith('violin 1') ? 'concertmaster' : 'principal') : null));
     });
     if (!sec.seatIds.length) list.appendChild(U.el('div', { class: 'hint' }, 'No seats assigned yet.'));
     secEl.appendChild(list);
     wrap.appendChild(secEl);
   }
   return wrap;
+};
+
+/* ---------- today hero (shared by public Today and director dashboard) ----------
+   Weekend-honest: Sat/Sun show "no rehearsals" unless the director explicitly
+   scheduled changes for that day (then only the changed ensembles appear). */
+Cards.scheduleHero = function (title) {
+  const today = U.todayYmd();
+  const dow = U.parseYmd(today).getDay();
+  const weekend = dow === 0 || dow === 6;
+  const dayRec = Store.data.scheduleChanges[today] || {};
+  const hasExplicit = Object.keys(dayRec.changes || {}).length > 0;
+
+  const hero = U.el('div', { class: 'hero' });
+  hero.appendChild(U.el('div', { class: 'hero-date' }, U.fmtDate(today, 'long')));
+  hero.appendChild(U.el('div', { class: 'hero-title' }, title));
+
+  let rows = Store.effectiveScheduleFor(today);
+  if (weekend) rows = rows.filter(r => r.changed);
+
+  if (weekend && !rows.length) {
+    hero.appendChild(U.el('div', { class: 'hero-row' },
+      U.el('span', { style: { flex: 1 } }, 'No rehearsals today — regular blocks resume Monday.')));
+  } else {
+    const list = U.el('div', { class: 'hero-sched' });
+    for (const row of rows) {
+      const r = U.el('div', { class: 'hero-row' + (row.cancelled ? ' cancelled' : '') });
+      const t = U.el('span', { class: 'ht' });
+      if (row.cancelled) t.textContent = '—';
+      else {
+        t.textContent = U.fmtTimeRange(row.start, row.end);
+        if (row.changed) t.appendChild(U.el('span', { class: 'was' }, U.fmtTimeRange(row.baseStart, row.baseEnd)));
+      }
+      r.appendChild(t);
+      r.appendChild(U.el('span', { class: 'hname', style: { flex: 1 } }, row.ensemble.name));
+      if (row.cancelled) r.appendChild(U.el('span', { class: 'badge cancelled' }, 'No rehearsal'));
+      else if (row.changed) r.appendChild(U.el('span', { class: 'badge changed' }, weekend ? 'Special day' : 'Time changed'));
+      list.appendChild(r);
+    }
+    hero.appendChild(list);
+  }
+  if (dayRec.note) hero.appendChild(U.el('div', { class: 'hero-note' }, '📝 ' + dayRec.note));
+  return hero;
 };
 
 /* Month view helper shared by Announcements / Assignments / Repertoire-by-concert:
@@ -302,7 +348,9 @@ function calendarPage(container, opts) {
             style: { '--tag-color': it.color === 'var-gold' ? 'var(--gold)' : it.color },
           }, it.title)));
         if (list.length > 3) box.appendChild(U.el('span', { class: 'mcal-more' }, '+' + (list.length - 3) + ' more'));
-        const dots = U.el('div', { class: 'mcal-dots', style: { display: 'none' } });
+        // Phones hide the text labels and show these dots instead (CSS swap —
+        // no inline styles, or the media query could never win).
+        const dots = U.el('div', { class: 'mcal-dots compact' });
         list.slice(0, 5).forEach(it => dots.appendChild(U.el('span', { class: 'mcal-dot', style: { '--tag-color': it.color === 'var-gold' ? 'var(--gold)' : it.color } })));
         box.appendChild(dots);
         return box;
@@ -669,30 +717,7 @@ function pieceDetailPage(container, id, opts) {
    ========================================================= */
 Views.public.today = function (container) {
   const today = U.todayYmd();
-  const sched = Store.effectiveScheduleFor(today);
-  const dayNote = (Store.data.scheduleChanges[today] || {}).note;
-
-  const hero = U.el('div', { class: 'hero' });
-  hero.appendChild(U.el('div', { class: 'hero-date' }, U.fmtDate(today, 'long')));
-  hero.appendChild(U.el('div', { class: 'hero-title' }, 'Today\'s rehearsals'));
-  const list = U.el('div', { class: 'hero-sched' });
-  for (const row of sched) {
-    const r = U.el('div', { class: 'hero-row' + (row.cancelled ? ' cancelled' : '') });
-    const t = U.el('span', { class: 'ht' });
-    if (row.cancelled) t.textContent = '—';
-    else {
-      t.textContent = U.fmtTimeRange(row.start, row.end);
-      if (row.changed) t.appendChild(U.el('span', { class: 'was' }, U.fmtTimeRange(row.baseStart, row.baseEnd)));
-    }
-    r.appendChild(t);
-    r.appendChild(U.el('span', { class: 'hname', style: { flex: 1 } }, row.ensemble.name));
-    if (row.cancelled) r.appendChild(U.el('span', { class: 'badge cancelled' }, 'No rehearsal'));
-    else if (row.changed) r.appendChild(U.el('span', { class: 'badge changed' }, 'Time changed'));
-    list.appendChild(r);
-  }
-  hero.appendChild(list);
-  if (dayNote) hero.appendChild(U.el('div', { class: 'hero-note' }, '📝 ' + dayNote));
-  container.appendChild(hero);
+  container.appendChild(Cards.scheduleHero("Today's rehearsals"));
 
   // Pinned + recent announcements (full cards)
   const pinned = Store.data.announcements.filter(a => a.pinned);

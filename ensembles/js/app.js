@@ -16,7 +16,7 @@ const App = {
     ['roll', 'Take Roll'],
     ['out', "Who's Out"],
     ['schedule', 'Schedule Changes'],
-    ['temp', 'Temp Roster Changes'],
+    ['temp', 'Temporary Roster Changes'],
     ['sep1', null],
     ['roster', 'Roster'],
     ['seating', 'Seating Charts'],
@@ -52,7 +52,12 @@ const App = {
   render() {
     const r = this.route();
     const gated = r.side === 'director' && !this.unlocked();
-    const side = r.side === 'director' && gated ? 'public' : r.side;
+
+    // Views can ask "did the user just navigate here?" (vs a same-page
+    // re-render after an edit) to decide whether to reset transient state.
+    const routeKey = r.side + '/' + r.page + '/' + (r.arg || '');
+    this.isFreshNav = routeKey !== this._lastRouteKey;
+    this._lastRouteKey = routeKey;
 
     document.body.className = 'side-' + (r.side === 'director' ? 'director' : 'public');
     this.renderChrome(r, gated);
@@ -88,7 +93,7 @@ const App = {
       chrome.appendChild(U.el('div', { class: 'director-banner', role: 'note' },
         U.el('span', { class: 'dot' }),
         U.el('span', null, 'Director Panel'),
-        U.el('span', { class: 'sub' }, gated ? '· sign in required' : '· editing area — changes publish to the student side')));
+        U.el('span', { class: 'sub' }, gated ? '· sign in required' : '· editing area — the student side shows what you set here')));
     }
 
     const s = Store.data.settings;
@@ -106,6 +111,13 @@ const App = {
         }, label));
       }
     }
+
+    // Phones: cue that the nav scrolls while tabs remain offscreen.
+    const updateNavCue = () => {
+      nav.classList.toggle('more-right', nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 8);
+    };
+    nav.addEventListener('scroll', updateNavCue, { passive: true });
+    requestAnimationFrame(updateNavCue);
 
     chrome.appendChild(U.el('header', { class: 'topbar' },
       U.el('div', { class: 'topbar-inner' },
@@ -187,7 +199,14 @@ const App = {
 };
 
 /* ---------- boot ---------- */
-Store.load();
+try {
+  Store.load();
+} catch (e) {
+  // Never a blank page: whatever happened, come up with defaults and say so.
+  console.error(e);
+  Store.data = Store.defaults();
+  Store.loadIssues = ['Saved data could not be read at all (' + (e && e.message ? e.message : 'unknown error') + '). The app restarted with defaults; check Settings → Recovery.'];
+}
 window.addEventListener('hashchange', () => App.render());
 if (!location.hash) location.hash = '#/today';
 App.render();

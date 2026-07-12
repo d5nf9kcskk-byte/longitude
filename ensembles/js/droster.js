@@ -9,28 +9,7 @@ const DRoster = {};
    ========================================================= */
 Views.director.home = function (container) {
   const today = U.todayYmd();
-  const sched = Store.effectiveScheduleFor(today);
-
-  const hero = U.el('div', { class: 'hero' });
-  hero.appendChild(U.el('div', { class: 'hero-date' }, U.fmtDate(today, 'long')));
-  hero.appendChild(U.el('div', { class: 'hero-title' }, 'Today at a glance'));
-  const list = U.el('div', { class: 'hero-sched' });
-  for (const row of sched) {
-    const r = U.el('div', { class: 'hero-row' + (row.cancelled ? ' cancelled' : '') });
-    const t = U.el('span', { class: 'ht' });
-    if (row.cancelled) t.textContent = '—';
-    else {
-      t.textContent = U.fmtTimeRange(row.start, row.end);
-      if (row.changed) t.appendChild(U.el('span', { class: 'was' }, U.fmtTimeRange(row.baseStart, row.baseEnd)));
-    }
-    r.appendChild(t);
-    r.appendChild(U.el('span', { style: { flex: 1 } }, row.ensemble.name));
-    if (row.cancelled) r.appendChild(U.el('span', { class: 'badge cancelled' }, 'No rehearsal'));
-    else if (row.changed) r.appendChild(U.el('span', { class: 'badge changed' }, 'Changed'));
-    list.appendChild(r);
-  }
-  hero.appendChild(list);
-  container.appendChild(hero);
+  container.appendChild(Cards.scheduleHero('Today at a glance'));
 
   // quick stats
   const out = Store.outOn(today);
@@ -370,15 +349,24 @@ DRoster.importDialog = function () {
 
   next.addEventListener('click', () => {
     const go = text => {
+      if (text.startsWith('PK') || text.startsWith('PK\x03\x04')) {
+        U.toast('That looks like an Excel file. Export it as CSV first (File → Save As / Download → CSV), then import that.', 'error');
+        return;
+      }
       const rows = U.parseDelimited(text);
       if (rows.length < 2) { U.toast('Need a header row plus at least one student.', 'error'); return; }
       DRoster.mappingDialog(rows);
     };
-    if (file.files && file.files[0]) {
+    const f = file.files && file.files[0];
+    if (f) {
+      if (/\.(xlsx?|numbers)$/i.test(f.name)) {
+        U.toast('"' + f.name + '" is a spreadsheet app file. Export it as CSV first (File → Save As / Download → CSV), then import that.', 'error');
+        return;
+      }
       const r = new FileReader();
       r.onload = () => go(String(r.result || ''));
       r.onerror = () => U.toast('Could not read that file.', 'error');
-      r.readAsText(file.files[0]);
+      r.readAsText(f);
     } else if (ta.value.trim()) {
       go(ta.value);
     } else {
@@ -466,6 +454,9 @@ DRoster.importReport = function (report) {
   const line = (n, txt) => U.el('div', { class: 'checkline' }, U.el('b', { style: { minWidth: '34px' } }, String(n)), txt);
   body.appendChild(line(report.added.length, 'new students added'));
   body.appendChild(line(report.updated.length, 'existing students updated with the file\'s info (conflicting fields replaced; notes & history kept)'));
+  if (report.restored && report.restored.length) {
+    body.appendChild(line(report.restored.length, 'returning students restored from Archived · Alumni (they were in the new file)'));
+  }
   body.appendChild(line(report.unchanged.length, 'already up to date'));
   if (report.notInFile.length) {
     body.appendChild(U.el('hr', { class: 'divider' }));
@@ -554,19 +545,24 @@ Views.director.roll = function (container) {
     const summary = U.el('div', { class: 'roll-summary', style: { marginBottom: '12px' } });
     const renderSummary = () => {
       const s = Store.rollSummary(state.date, eid);
+      const fresh = Store.roll(state.date, eid);
+      const unmarked = students.filter(st => !fresh[st.id]).length;
       summary.innerHTML = '';
       summary.appendChild(U.el('span', { class: 'pill P' }, s.P + ' present'));
       summary.appendChild(U.el('span', { class: 'pill A' }, s.A + ' absent'));
       summary.appendChild(U.el('span', { class: 'pill T' }, s.T + ' tardy'));
       summary.appendChild(U.el('span', { class: 'pill E' }, s.E + ' excused'));
-      summary.appendChild(U.el('span', { class: 'pill' }, (students.length - s.total) + ' unmarked'));
+      summary.appendChild(U.el('span', { class: 'pill' }, unmarked + ' unmarked'));
     };
     renderSummary();
     container.appendChild(U.el('div', { class: 'toolbar' },
       U.el('button', {
         class: 'btn sm',
         onclick: () => {
-          for (const st of students) if (!marks[st.id]) Store.setRollMark(state.date, eid, st.id, 'P');
+          // Read the CURRENT roll, not the render-time snapshot — otherwise
+          // absences tapped since page load would be flipped to present.
+          const cur = Store.roll(state.date, eid);
+          for (const st of students) if (!cur[st.id]) Store.setRollMark(state.date, eid, st.id, 'P');
           App.render();
         },
       }, '✓ Mark all unmarked present'),
@@ -784,22 +780,43 @@ Views.director.out = function (container) {
       },
     }));
   } else {
+    // List view covers the same ground as Today/Month: planned absences AND
+    // pull-outs, so nothing that shows as a dot can "vanish" here.
     const today = U.todayYmd();
-    const entries = Store.data.whosOut.slice().sort((a, b) => a.from < b.from ? -1 : 1);
+    const entries = Store.data.whosOut
+      .filter(w => Store.isVisibleStudent(w.studentId))
+      .sort((a, b) => a.from < b.from ? -1 : 1);
+    const pulls = Store.data.tempChanges
+      .filter(t => t.type === 'pull-out' && Store.isVisibleStudent(t.studentId))
+      .sort((a, b) => a.from < b.from ? -1 : 1);
     const current = entries.filter(w => (w.to || w.from) >= today);
     const past = entries.filter(w => (w.to || w.from) < today).reverse();
-    if (!entries.length) {
+    if (!entries.length && !pulls.length) {
       container.appendChild(U.empty('🏝️', 'No out entries yet', 'Use "+ Mark someone out" for planned absences — field trips, auditions, illness.'));
       return;
     }
     if (current.length) {
-      container.appendChild(U.el('div', { class: 'section-label' }, 'Current & upcoming'));
+      container.appendChild(U.el('div', { class: 'section-label' }, 'Marked out — current & upcoming'));
       const l = U.el('div', { class: 'rowlist' });
       current.forEach(w => l.appendChild(outCard(w, true)));
       container.appendChild(l);
     }
+    if (pulls.length) {
+      container.appendChild(U.el('div', { class: 'section-label' }, 'Pull-outs (temporary roster changes)'));
+      const l = U.el('div', { class: 'rowlist' });
+      for (const t of pulls) {
+        const st = Store.studentById(t.studentId);
+        const e = Store.ensembleById(t.ensembleId);
+        l.appendChild(U.el('div', { class: 'rowitem' },
+          U.el('div', { class: 'row-main' },
+            U.el('div', { class: 'row-title' }, st ? st.last + ', ' + (st.preferred || st.first) : '(removed student)'),
+            U.el('div', { class: 'row-sub' }, 'pulled from ' + (e ? e.name : '?') + ' · ' + U.fmtRangeDates(t.from, t.to) + (t.note ? ' — ' + t.note : ''))),
+          U.el('a', { class: 'btn sm', href: '#/d/temp' }, 'Open')));
+      }
+      container.appendChild(l);
+    }
     if (past.length) {
-      container.appendChild(U.el('div', { class: 'section-label' }, 'Past'));
+      container.appendChild(U.el('div', { class: 'section-label' }, 'Marked out — past'));
       const l = U.el('div', { class: 'rowlist' });
       past.forEach(w => l.appendChild(outCard(w, true)));
       container.appendChild(l);
@@ -807,12 +824,25 @@ Views.director.out = function (container) {
   }
 };
 
+/* Student options for pickers. When editing an entry whose student is now
+   archived (or gone), keep that student selectable — otherwise the browser
+   silently preselects someone else and Save reassigns the entry. */
+DRoster.studentOptions = function (currentId) {
+  const opts = Store.activeStudents().sort(U.byLastName)
+    .map(s => ({ value: s.id, label: s.last + ', ' + s.first + (s.instrument ? ' · ' + s.instrument : '') }));
+  if (currentId && !opts.some(o => o.value === currentId)) {
+    const st = Store.studentById(currentId);
+    opts.unshift({ value: currentId, label: st ? st.last + ', ' + st.first + ' (archived)' : '(removed student)' });
+  }
+  return opts;
+};
+
 DRoster.outDialog = function (w) {
   const isNew = !w;
   const students = Store.activeStudents().sort(U.byLastName);
-  if (!students.length) { U.toast('Add students to the roster first.', 'error'); return; }
+  if (!students.length && isNew) { U.toast('Add students to the roster first.', 'error'); return; }
   const body = U.el('div');
-  const stSel = U.select(students.map(s => ({ value: s.id, label: s.last + ', ' + s.first })), w ? w.studentId : students[0].id, null);
+  const stSel = U.select(DRoster.studentOptions(w && w.studentId), w ? w.studentId : students[0].id, null);
   stSel.classList.add('block');
   const from = U.input({ type: 'date', value: w ? w.from : U.todayYmd() });
   const to = U.input({ type: 'date', value: w ? (w.to || '') : '' });

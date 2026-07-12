@@ -203,7 +203,12 @@ U.el = function (tag, attrs, ...children) {
     else if (k === 'html') node.innerHTML = v;
     else if (k === 'dataset') Object.assign(node.dataset, v);
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
-    else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      for (const [prop, val] of Object.entries(v)) {
+        if (prop.startsWith('--')) node.style.setProperty(prop, val); // custom props need setProperty
+        else node.style[prop] = val;
+      }
+    }
     else node.setAttribute(k, v === true ? '' : v);
   }
   for (const c of children.flat(Infinity)) {

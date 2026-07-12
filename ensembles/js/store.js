@@ -112,12 +112,28 @@ const Store = {
       }
     }
     base.version = parsed.version || 1;
-    this.data = this.migrate(base);
+    try {
+      this.data = this.migrate(base);
+    } catch (e) {
+      // A corrupt element inside an otherwise valid section must never brick
+      // the app — stash everything and restart with defaults, loudly.
+      if (!stashed) this.stashRecovery(raw);
+      this.loadIssues.push('Saved data contained unreadable entries and was reset. The original was preserved as a recovery backup (Settings → Recovery).');
+      this.data = this.defaults();
+    }
     return this.data;
   },
 
   migrate(d) {
-    d.settings = Object.assign(this.defaults().settings, d.settings || {});
+    // Drop corrupt (non-object) elements from every list before touching them.
+    const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+    for (const key of Object.keys(this.SECTION_KINDS)) {
+      if (this.SECTION_KINDS[key] === 'array' && Array.isArray(d[key])) d[key] = d[key].filter(isObj);
+    }
+    for (const k of ['attendance', 'scheduleChanges']) {
+      if (isObj(d[k])) for (const day of Object.keys(d[k])) { if (!isObj(d[k][day])) delete d[k][day]; }
+    }
+    d.settings = Object.assign(this.defaults().settings, isObj(d.settings) ? d.settings : {});
     if (!Array.isArray(d.blocks) || d.blocks.length < 2) d.blocks = this.blocksDefault();
     if (!Array.isArray(d.ensembles) || !d.ensembles.length) d.ensembles = this.ensemblesDefault();
     if (!Array.isArray(d.divisions)) d.divisions = this.divisionsDefault();
@@ -136,8 +152,14 @@ const Store = {
       if (!st.id) st.id = U.uid();
       if (!st.status) st.status = 'active';
       if (!Array.isArray(st.contacts)) st.contacts = [];
+      st.contacts = st.contacts.filter(isObj);
       if (!Array.isArray(st.ensembleIds)) st.ensembleIds = [];
       if (!st.extra || typeof st.extra !== 'object') st.extra = {};
+    }
+    for (const chart of d.seatingCharts) {
+      if (!Array.isArray(chart.sections)) chart.sections = [];
+      chart.sections = chart.sections.filter(isObj);
+      for (const sec of chart.sections) if (!Array.isArray(sec.seatIds)) sec.seatIds = [];
     }
     return d;
   },
@@ -197,7 +219,12 @@ const Store = {
       const ok = v !== undefined && (kind === 'array' ? Array.isArray(v) : (v && typeof v === 'object' && !Array.isArray(v)));
       if (ok) base[key] = v;
     }
-    this.data = this.migrate(base);
+    try {
+      this.data = this.migrate(base);
+    } catch (e) {
+      this.data = this.load(); // put the previous data back
+      return { ok: false, error: 'That backup contains unreadable entries and was not restored.' };
+    }
     this.save();
     return { ok: true };
   },
@@ -330,14 +357,24 @@ const Store = {
   },
 
   /* ---------- who's out ---------- */
+  /* Archived students are invisible here too — their history stays stored,
+     but nothing about them surfaces anywhere in the app. */
+  isVisibleStudent(id) {
+    const s = this.studentById(id);
+    return !!s && s.status !== 'archived';
+  },
   outOn(date) {
-    const manual = this.data.whosOut.filter(w => U.inRange(date, w.from, w.to || w.from));
-    const pulls = this.data.tempChanges.filter(t => t.type === 'pull-out' && U.inRange(date, t.from, t.to || t.from));
+    const manual = this.data.whosOut.filter(w =>
+      U.inRange(date, w.from, w.to || w.from) && this.isVisibleStudent(w.studentId));
+    const pulls = this.data.tempChanges.filter(t =>
+      t.type === 'pull-out' && U.inRange(date, t.from, t.to || t.from) && this.isVisibleStudent(t.studentId));
     const absent = [];
     const day = this.data.attendance[date] || {};
     for (const [eid, marks] of Object.entries(day)) {
       for (const [sid, code] of Object.entries(marks)) {
-        if (code === 'A' || code === 'E') absent.push({ studentId: sid, ensembleId: eid, code });
+        if ((code === 'A' || code === 'E') && this.isVisibleStudent(sid)) {
+          absent.push({ studentId: sid, ensembleId: eid, code });
+        }
       }
     }
     return { manual, pulls, absent };
@@ -438,7 +475,9 @@ const Store = {
           if (!slots[spec.slot]) {
             slots[spec.slot] = { name: '', relation: spec.role ? spec.role.replace(/\b\w/g, c => c.toUpperCase()) : '', email: '', phone: '' };
           }
-          if (spec.field === 'name') slots[spec.slot].name = val;
+          // Append rather than overwrite so "Parent 1 First Name" + "Parent 1
+          // Last Name" become "Maria Lopez" instead of losing the first name.
+          if (spec.field === 'name') slots[spec.slot].name = slots[spec.slot].name ? slots[spec.slot].name + ' ' + val : val;
           else if (spec.field === 'relation') slots[spec.slot].relation = val;
           else if (spec.field === 'email') slots[spec.slot].email = slots[spec.slot].email ? slots[spec.slot].email + ', ' + val : val;
           else if (spec.field === 'phone') slots[spec.slot].phone = slots[spec.slot].phone ? slots[spec.slot].phone + ', ' + val : val;
@@ -465,7 +504,7 @@ const Store = {
      Returns a report; also lists active students NOT present in the file so
      the UI can offer to archive them at semester turnover. */
   mergeImport(incoming, mode) {
-    const report = { added: [], updated: [], unchanged: [], notInFile: [] };
+    const report = { added: [], updated: [], unchanged: [], restored: [], notInFile: [] };
     const index = new Map();
     for (const s of this.data.students) index.set(this.matchKey(s), s);
     // also index by plain name so a file without emails still matches
@@ -481,6 +520,12 @@ const Store = {
       if (match) {
         seen.add(match.id);
         if (mode === 'add') { report.unchanged.push(match); continue; }
+        if (match.status === 'archived') {
+          // They're in the new semester's file — they're back. Restore them.
+          match.status = 'active';
+          delete match.archivedAt;
+          report.restored.push(match);
+        }
         let changed = false;
         for (const f of ['first', 'last', 'preferred', 'grade', 'instrument', 'section', 'email', 'phone', 'sid']) {
           if ((inc[f] || '').trim() && inc[f] !== match[f]) { match[f] = inc[f]; changed = true; }

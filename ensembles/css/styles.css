@@ -137,6 +137,13 @@ body.side-director .topbar { background: rgba(13, 16, 21, 0.92); border-bottom: 
   margin-top: 6px; padding-bottom: 0;
 }
 .nav::-webkit-scrollbar { display: none; }
+/* Tablets/desktop: wrap instead of hiding tabs offscreen. */
+@media (min-width: 641px) { .nav { flex-wrap: wrap; } }
+/* Phones: fade the right edge while more tabs remain offscreen. */
+.nav.more-right {
+  -webkit-mask-image: linear-gradient(90deg, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, #000 86%, transparent);
+}
 .nav a {
   padding: 8px 13px 10px;
   font-size: 14px;
@@ -344,12 +351,13 @@ body.side-director .seg-btn.active { background: var(--accent); color: var(--acc
 }
 .mcal-evt.division { border: 1px dashed color-mix(in srgb, var(--tag-color, #888) 55%, transparent); }
 .mcal-dots { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
+.mcal-dots.compact { display: none; }      /* label-replacement dots, phones only */
 .mcal-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tag-color, var(--accent)); }
 .mcal-more { font-size: 10px; color: var(--ink-3); font-weight: 700; }
 @media (max-width: 640px) {
   .mcal-cell { min-height: 52px; padding: 3px 4px; }
-  .mcal-evt { display: none; }             /* phones: dots only */
-  .mcal-cell .mcal-dots { display: flex; }
+  .mcal-evt { display: none; }             /* phones: dots instead of labels */
+  .mcal-dots.compact { display: flex; }
 }
 
 /* ---------- list rows ---------- */

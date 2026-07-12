@@ -342,7 +342,7 @@ Views.director.temp = function (container) {
   container.appendChild(toolbar);
 
   const entries = Store.data.tempChanges
-    .filter(t => filter === 'all' || t.ensembleId === filter)
+    .filter(t => (filter === 'all' || t.ensembleId === filter) && Store.isVisibleStudent(t.studentId))
     .sort((a, b) => a.from < b.from ? -1 : 1);
 
   const rowFor = t => {
@@ -420,7 +420,7 @@ Views.director.temp = function (container) {
 DSchedule.tempDialog = function (t) {
   const isNew = !t;
   const students = Store.activeStudents().sort(U.byLastName);
-  if (!students.length) { U.toast('Add students to the roster first.', 'error'); return; }
+  if (!students.length && isNew) { U.toast('Add students to the roster first.', 'error'); return; }
   const body = U.el('div');
 
   let type = t ? t.type : 'sub-in';
@@ -435,7 +435,7 @@ DSchedule.tempDialog = function (t) {
   typeWrap.appendChild(mkRadio('pull-out', 'Pull out', 'student temporarily LEAVES the ensemble below'));
   body.appendChild(U.field('What\'s happening?', typeWrap));
 
-  const stSel = U.select(students.map(s => ({ value: s.id, label: s.last + ', ' + s.first + (s.instrument ? ' · ' + s.instrument : '') })),
+  const stSel = U.select(DRoster.studentOptions(t && t.studentId),
     t ? t.studentId : students[0].id, null);
   stSel.classList.add('block');
   body.appendChild(U.field('Student', stSel));
