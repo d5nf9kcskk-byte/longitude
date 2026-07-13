@@ -68,6 +68,13 @@ Ensemble, Jazz, Chamber Winds) are the only "classes"; Dance/Theater/
 Visual Arts exist solely as calendar labels, never as ensembles or
 filters.
 
+**Longitude and the Ensembles Hub must never interact.** Different
+audiences: Longitude is Grant's personal dashboard; the hub is for
+students, families, and directors. No links in either direction (no hub
+card on Longitude's home, no Longitude mention anywhere in `ensembles/`),
+no shared storage keys, no shared code. They share GitHub Pages hosting
+only.
+
 ## AI Reader architecture
 
 The Schwarz Workbench's AI Reader never calls Anthropic from the browser.

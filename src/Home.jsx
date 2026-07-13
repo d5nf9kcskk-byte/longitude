@@ -146,27 +146,9 @@ export default function Home() {
           </div>
           <div style={{ fontSize: '12px', color: '#b48c3c' }}>Companion app</div>
         </a>
-        {/* Ensembles Hub is likewise a standalone static companion app at
-            /ensembles/ — student side plus a dark Director Panel. */}
-        <a
-          href={`${import.meta.env.BASE_URL}ensembles/`}
-          style={{
-            display: 'block',
-            textDecoration: 'none',
-            color: '#e8e8e8',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderTop: '2px solid #0e7a5f',
-            borderRadius: '10px',
-            padding: '18px 18px 16px',
-          }}
-        >
-          <div style={{ fontSize: '16px', marginBottom: '3px' }}>Ensembles Hub ↗</div>
-          <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic', marginBottom: '12px' }}>
-            Schedules, roll, repertoire — student side & Director Panel
-          </div>
-          <div style={{ fontSize: '12px', color: '#0e7a5f' }}>Companion app</div>
-        </a>
+        {/* NOTE: the Ensembles Hub at /ensembles/ is deliberately NOT linked
+            here (and it never links back). It's a school-facing app; Longitude
+            is personal. They share hosting only — no links, no shared data. */}
         {CARDS.map(card => (
           <NavLink
             key={card.to}
