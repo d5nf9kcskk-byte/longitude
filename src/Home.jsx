@@ -146,9 +146,6 @@ export default function Home() {
           </div>
           <div style={{ fontSize: '12px', color: '#b48c3c' }}>Companion app</div>
         </a>
-        {/* NOTE: the Ensembles Hub at /ensembles/ is deliberately NOT linked
-            here (and it never links back). It's a school-facing app; Longitude
-            is personal. They share hosting only — no links, no shared data. */}
         {CARDS.map(card => (
           <NavLink
             key={card.to}

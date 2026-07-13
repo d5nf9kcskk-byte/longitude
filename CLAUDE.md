@@ -57,23 +57,21 @@ alongside `.github/workflows/deploy.yml` (two workflows deploying the
 same Pages site race each other). Its GitHub-sync data lands in `data/`,
 which the deploy trigger ignores.
 
-`ensembles/` is the NWSA Music Ensembles Hub — same companion-app rules
-(static, plain HTML/CSS/JS, ships at `/ensembles/`). Two sides in one
-app: a light student/family side, and a dark **Director Panel** behind
-`#/d/…` with an optional PIN. All real data (rosters, contacts, notes,
-attendance) lives in localStorage on the director's device only — the
-repo ships empty, with generic demo data behind a "Load sample data"
-button, and must stay that way. Music ensembles (Symphony, Wind
-Ensemble, Jazz, Chamber Winds) are the only "classes"; Dance/Theater/
-Visual Arts exist solely as calendar labels, never as ensembles or
-filters.
+**The NWSA Music Ensembles Hub does NOT live here — and never may.**
+It has its own repository (`nwsa-music`) and its own Pages site.
+Different audiences: Longitude is Grant's personal dashboard; the hub is
+for students, families, and directors. Hard rules, enforced by CI in
+both repos:
 
-**Longitude and the Ensembles Hub must never interact.** Different
-audiences: Longitude is Grant's personal dashboard; the hub is for
-students, families, and directors. No links in either direction (no hub
-card on Longitude's home, no Longitude mention anywhere in `ensembles/`),
-no shared storage keys, no shared code. They share GitHub Pages hosting
-only.
+- No `ensembles/` folder in this repo, ever again. This repo's Pages
+  deploy hard-fails if it reappears (see the "Separation guard" step in
+  `.github/workflows/deploy.yml`).
+- No reference to the hub (`ensembles/` paths or the `nwsa-music` repo
+  name) anywhere in Longitude's `src/`, `public/`, or `index.html` —
+  same guard, same hard failure.
+- The hub's own deploy hard-fails if anything in its codebase mentions
+  this repo's name. No links, no shared storage keys, no shared code,
+  in either direction.
 
 ## AI Reader architecture
 

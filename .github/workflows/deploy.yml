@@ -25,6 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # HARD SEPARATION GUARD — the Ensembles Hub lives in its own
+      # repository (nwsa-music) and must never return here. If the app
+      # folder reappears, or Longitude's source references the hub, the
+      # deploy fails dead right here.
+      - name: Separation guard (Ensembles Hub must stay in its own repo)
+        run: |
+          if [ -d ensembles ]; then
+            echo "::error::Separation violation: ensembles/ must not exist in this repo — the hub lives in the nwsa-music repository. Deploy blocked."
+            exit 1
+          fi
+          if grep -rn "ensembles/\|nwsa-music" src/ public/ index.html 2>/dev/null; then
+            echo "::error::Separation violation: Longitude source must not reference the Ensembles Hub. Deploy blocked."
+            exit 1
+          fi
+          echo "Separation guard passed."
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -44,10 +60,11 @@ jobs:
 
       # Companion apps live in their own folders as static sites and ride
       # along in the same Pages deployment (e.g. /score-study/).
+      # NOTE: the Ensembles Hub is NOT one of them — it lives in its own
+      # repository (nwsa-music) and is guarded against ever returning here.
       - name: Include companion apps
         run: |
           [ -d score-study ] && cp -r score-study dist/score-study || true
-          [ -d ensembles ] && cp -r ensembles dist/ensembles || true
           [ -d data ] && cp -r data dist/data || true
 
       - uses: actions/configure-pages@v5
