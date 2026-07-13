@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router';
 import { loadKey } from './storage';
+import { loadCollection, countCache } from './podiumStore';
 import { GOLD } from './theme';
 
 // Reads each module's stored blob to surface one live stat per card.
@@ -80,6 +81,7 @@ const CARDS = [
   { to: '/workbench', title: 'Schwarz Workbench', sub: 'The recording-legacy article', key: 'workbench', accent: GOLD },
   { to: '/syllabi', title: 'Syllabus Essentials', sub: 'One core objective per course', key: 'syllabi', accent: '#6aaf4a' },
   { to: '/recruiting', title: 'Recruitment', sub: 'Pipeline, timeline, templates', key: 'recruiting', accent: '#4a7abf' },
+  { to: '/podium', title: 'Podium', sub: 'Guest-conducting outreach', key: 'podium', accent: GOLD },
   { to: '/practice', title: 'Study Log', sub: 'Scores, baton, listening', key: 'practice', accent: '#bf7a5a' },
   { to: '/ideas', title: 'Idea Capture', sub: 'Podcast, articles, programming', key: 'ideas', accent: '#8a5abf' },
   { to: '/tasks', title: 'Task Board', sub: 'Now · Next · Later · Done', key: 'tasks', accent: '#4aaf7a' },
@@ -101,6 +103,18 @@ export default function Home() {
         loadKey(KEYS.tasks, null),
       ]);
       if (alive) setStats(computeStats({ season, workbench, syllabi, recruiting, practice, ideas, tasks }));
+      // Podium stores per-record collections, not a module blob — read counts.
+      await Promise.all([loadCollection('orchestras'), loadCollection('contacts')]);
+      if (alive) {
+        const orch = countCache('orchestras');
+        const people = countCache('contacts');
+        setStats(prev => ({
+          ...prev,
+          podium: orch > 0 || people > 0
+            ? `${orch} orchestra${orch !== 1 ? 's' : ''} · ${people} contact${people !== 1 ? 's' : ''}`
+            : 'No orchestras loaded yet',
+        }));
+      }
     })();
     return () => { alive = false; };
   }, []);

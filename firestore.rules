@@ -34,6 +34,15 @@ service cloud.firestore {
     // GitHub Action to mark them done.
     match /aiRequests/{doc} { allow read, write: if isOwner(); }
 
+    // Podium — guest-conducting outreach. One document per record (not the
+    // module-blob pattern) so hundreds of orchestras and thousands of contacts
+    // scale. `contacts` and `outreach` hold people, emails, notes, and touch
+    // history — owner-only, never public. The Phase 3 scraper Action reaches
+    // these via the Admin SDK, which bypasses these rules.
+    match /orchestras/{doc} { allow read, write: if isOwner(); }
+    match /contacts/{doc}   { allow read, write: if isOwner(); }
+    match /outreach/{doc}   { allow read, write: if isOwner(); }
+
     // Deny everything else by default
     match /{document=**}    { allow read, write: if false; }
   }

@@ -9,6 +9,7 @@ import RecruitmentTracker from './modules/RecruitmentTracker';
 import PracticeLog from './modules/PracticeLog';
 import IdeaCapture from './modules/IdeaCapture';
 import TaskBoard from './modules/TaskBoard';
+import Podium from './modules/Podium';
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
@@ -16,6 +17,7 @@ const NAV = [
   { to: '/workbench', label: 'Workbench' },
   { to: '/syllabi', label: 'Syllabi' },
   { to: '/recruiting', label: 'Recruiting' },
+  { to: '/podium', label: 'Podium' },
   { to: '/practice', label: 'Study' },
   { to: '/ideas', label: 'Ideas' },
   { to: '/tasks', label: 'Tasks' },
@@ -107,6 +109,7 @@ export default function App() {
               <Route path="/workbench" element={<SchwarzWorkbench />} />
               <Route path="/syllabi" element={<SyllabusEssentials />} />
               <Route path="/recruiting" element={<RecruitmentTracker />} />
+              <Route path="/podium" element={<Podium />} />
               <Route path="/practice" element={<PracticeLog />} />
               <Route path="/ideas" element={<IdeaCapture />} />
               <Route path="/tasks" element={<TaskBoard />} />
