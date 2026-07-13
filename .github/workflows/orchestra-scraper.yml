@@ -1,11 +1,12 @@
 name: Orchestra Scraper
 
 on:
-  # Refresh Podium's contact database from orchestra websites. Runs weekly and
-  # rotates through the stalest orchestras; new/changed people land in the
-  # app's Review tab flagged reviewed:false. Never sends email.
+  # Refresh Podium's contact database from orchestra websites. Runs weekly on
+  # Monday evening (Eastern) and rotates through the stalest orchestras;
+  # new/changed people land in the app's Review tab flagged reviewed:false.
+  # Never sends email. Cron is UTC: 23:43 Mon ≈ 7:43pm EDT / 6:43pm EST.
   schedule:
-    - cron: '17 6 * * 1'
+    - cron: '43 23 * * 1'
   # Run on demand from the Actions tab.
   workflow_dispatch:
     inputs:
