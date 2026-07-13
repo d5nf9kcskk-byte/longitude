@@ -57,16 +57,32 @@ Grant's working professional thesis: he wants to be the conductor an executive d
 
 Your role: read whatever Grant shares (thesis, draft sections, notes, questions) and respond as a sharp editorial eye. Point out where the argument is weak, where a claim needs evidence, where the prose goes slack, and what's genuinely strong. Be specific about the Schwarz repertoire and discography when relevant. No flattery. No hedging. Treat Grant as a peer who can take honest feedback.`;
 
+// Podium outreach drafter. Public-safe by design: it describes Grant's brand
+// and the value-first, no-ask outreach style, NOT relationship strategy toward
+// any named individual (per CLAUDE.md the details come from the runtime prompt,
+// built from private Firestore data — never from committed source).
+const PODIUM_PROMPT = `You are a writing assistant drafting professional outreach emails for Grant Gilman — conductor, Director of Orchestras at New World School of the Arts, host of the "American Muse" podcast, author of the forthcoming "Secrets of American Orchestral Music."
+
+Grant's brand: the American symphonic tradition — the Second New England School (Chadwick, Beach) through the postwar symphonists (Hanson, Piston, Schuman, Mennin, Creston), read alongside the reappraisal of Florence Price and William Grant Still. His thesis: American symphonic repertoire, rehearsed to the standard of the core European romantics, is a subscription argument, not a niche indulgence.
+
+These emails go to decision-makers at professional orchestras (executive directors, music directors, artistic administrators, personnel managers, board members). The governing rule: VALUE-FIRST, NO DIRECT ASK. The email should offer something — a program idea, an artifact, a genuine observation — and never request a booking, a meeting, or a favor. The goal is recognition, not conversion.
+
+Write in Grant's voice: specific, confident, warm, and concrete. Vague affirmational language (sincerity, joy, transformation) is the opposite of the brand — every claim should be one a skeptical executive director could actually test. Keep emails tight. Return only the email text (subject line + body), ready to personalize further. Preserve any [bracketed] placeholder only where you genuinely lack the fact.`;
+
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function answer(messages) {
+function systemFor(module) {
+  return module === 'podium' ? PODIUM_PROMPT : SYSTEM_PROMPT;
+}
+
+async function answer(messages, module) {
   const msg = await anthropic.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 2000,
     thinking: { type: 'adaptive' },
-    system: SYSTEM_PROMPT,
+    system: systemFor(module),
     messages,
   });
   if (msg.stop_reason === 'refusal') {
@@ -105,9 +121,9 @@ async function main() {
       failed++;
       continue;
     }
-    console.log(`  Answering ${docSnap.id} (${messages.length} message(s))…`);
+    console.log(`  Answering ${docSnap.id} (${messages.length} message(s), module=${req.module || 'schwarz'})…`);
     try {
-      const response = await answer(messages);
+      const response = await answer(messages, req.module);
       await docSnap.ref.update({
         status: 'done',
         response,

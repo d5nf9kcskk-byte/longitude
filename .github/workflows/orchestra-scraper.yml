@@ -1,0 +1,35 @@
+name: Orchestra Scraper
+
+on:
+  # Refresh Podium's contact database from orchestra websites. Runs weekly and
+  # rotates through the stalest orchestras; new/changed people land in the
+  # app's Review tab flagged reviewed:false. Never sends email.
+  schedule:
+    - cron: '17 6 * * 1'
+  # Run on demand from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      max:
+        description: 'Max orchestras to scrape this run'
+        required: false
+        default: '8'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm install
+
+      - name: Scrape orchestra staff/board contacts
+        run: node scripts/orchestra-scraper.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          SCRAPE_MAX: ${{ github.event.inputs.max || '8' }}

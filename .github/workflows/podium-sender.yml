@@ -1,0 +1,40 @@
+name: Podium Sender
+
+# Sends APPROVED, QUEUED outreach from conductor@grantgilman.com via iCloud
+# SMTP. MANUAL ONLY — no schedule — and DRY RUN unless you set live=true.
+# Confirm SPF/DKIM/DMARC and warm the domain before sending live.
+
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: 'Actually send? (true = live, anything else = dry run)'
+        required: false
+        default: 'false'
+      max:
+        description: 'Max messages this run'
+        required: false
+        default: '10'
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm install
+
+      - name: Send queued outreach
+        run: node scripts/podium-sender.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          ICLOUD_SMTP_USER: ${{ secrets.ICLOUD_SMTP_USER }}
+          ICLOUD_SMTP_PASS: ${{ secrets.ICLOUD_SMTP_PASS }}
+          ICLOUD_FROM: ${{ secrets.ICLOUD_FROM }}
+          PODIUM_SEND_LIVE: ${{ github.event.inputs.live }}
+          SEND_MAX: ${{ github.event.inputs.max || '10' }}
