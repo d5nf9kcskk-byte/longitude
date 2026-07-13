@@ -58,7 +58,7 @@ same Pages site race each other). Its GitHub-sync data lands in `data/`,
 which the deploy trigger ignores.
 
 **The NWSA Music Ensembles Hub does NOT live here — and never may.**
-It has its own repository (`nwsa-music`) and its own Pages site.
+It has its own repository (`nwsa-music-hub`) and its own Pages site.
 Different audiences: Longitude is Grant's personal dashboard; the hub is
 for students, families, and directors. Hard rules, enforced by CI in
 both repos:
@@ -66,7 +66,7 @@ both repos:
 - No `ensembles/` folder in this repo, ever again. This repo's Pages
   deploy hard-fails if it reappears (see the "Separation guard" step in
   `.github/workflows/deploy.yml`).
-- No reference to the hub (`ensembles/` paths or the `nwsa-music` repo
+- No reference to the hub (`ensembles/` paths or the `nwsa-music-hub` repo
   name) anywhere in Longitude's `src/`, `public/`, or `index.html` —
   same guard, same hard failure.
 - The hub's own deploy hard-fails if anything in its codebase mentions
