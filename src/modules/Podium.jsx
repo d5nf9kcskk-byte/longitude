@@ -44,6 +44,12 @@ const ROLES = [
   'Artistic Administrator', 'Personnel Manager', 'Board Member', 'Other',
 ];
 
+// The roles that actually influence guest-conductor decisions — used to sort
+// the Review queue so the people worth approving float to the top, and to power
+// the "discard all board members" bulk action.
+const DECISION_ROLES = ['Executive Director', 'Music Director', 'Artistic Director', 'Artistic Administrator', 'Personnel Manager'];
+const ROLE_PRIORITY = Object.fromEntries(ROLES.map((r, i) => [r, i]));
+
 const TIERS = ['T1', 'T2', 'T3', 'T4'];
 const TIER_LABEL = { T1: 'Major', T2: 'Regional', T3: 'Metropolitan', T4: 'Adjacent' };
 const EMAIL_CONFIDENCE = ['unknown', 'inferred', 'verified'];
@@ -582,6 +588,11 @@ export default function Podium() {
   const [selectedTemplate, setSelectedTemplate] = useState('intro');
   const [copied, setCopied] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  // Review-tab triage
+  const [reviewRole, setReviewRole] = useState('All');
+  const [reviewConf, setReviewConf] = useState('All');
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([loadCollection(ORCH), loadCollection(CONTACTS)]).then(([o, c]) => { setOrchestras(o); setContacts(c); });
@@ -604,6 +615,24 @@ export default function Podium() {
     setContacts(prev => prev.filter(c => c.orchestraId !== id));
   }, [contacts]);
   const removeContact = useCallback(async id => { await deleteRecord(CONTACTS, id); setContacts(prev => prev.filter(x => x.id !== id)); }, []);
+
+  // Bulk triage for the Review queue — operate on a set of ids, update state once.
+  const approveMany = useCallback(async ids => {
+    if (!ids.length) return;
+    setBulkBusy(true);
+    const idset = new Set(ids);
+    for (const c of contacts.filter(x => idset.has(x.id))) await saveRecord(CONTACTS, { ...c, reviewed: true });
+    setContacts(prev => prev.map(c => (idset.has(c.id) ? { ...c, reviewed: true } : c)));
+    setBulkBusy(false);
+  }, [contacts]);
+  const discardMany = useCallback(async ids => {
+    if (!ids.length) return;
+    setBulkBusy(true);
+    const idset = new Set(ids);
+    for (const id of ids) await deleteRecord(CONTACTS, id);
+    setContacts(prev => prev.filter(c => !idset.has(c.id)));
+    setBulkBusy(false);
+  }, []);
 
   async function seedOrchestras() {
     setSeeding(true);
@@ -639,6 +668,23 @@ export default function Podium() {
 
   const dueContacts = contacts.filter(isDue).sort((a, b) => (a.nextTouchDue || '') .localeCompare(b.nextTouchDue || ''));
   const reviewContacts = contacts.filter(c => c.reviewed === false);
+
+  const rq = reviewSearch.trim().toLowerCase();
+  const reviewFiltered = reviewContacts
+    .filter(c => reviewRole === 'All' || c.roleCategory === reviewRole)
+    .filter(c => reviewConf === 'All' || c.emailConfidence === reviewConf)
+    .filter(c => {
+      if (!rq) return true;
+      const o = orchById[c.orchestraId];
+      return `${c.name} ${c.title} ${c.roleCategory} ${o?.name || ''}`.toLowerCase().includes(rq);
+    })
+    // Decision-makers first, then by orchestra, so the ~4 that matter per org lead.
+    .sort((a, b) => {
+      const pa = ROLE_PRIORITY[a.roleCategory] ?? 99, pb = ROLE_PRIORITY[b.roleCategory] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return (orchById[a.orchestraId]?.name || '').localeCompare(orchById[b.orchestraId]?.name || '');
+    });
+  const reviewBoardCount = reviewContacts.filter(c => c.roleCategory === 'Board Member').length;
 
   const tmpl = templates[selectedTemplate];
   const fullTemplate = `Subject: ${tmpl.subject}\n\n${tmpl.body}`;
@@ -746,20 +792,66 @@ export default function Podium() {
             <div style={{ textAlign: 'center', padding: '50px 20px', color: '#444', border: '1px dashed rgba(255,255,255,0.06)', borderRadius: '10px' }}><div style={{ fontSize: '13px' }}>Nothing to review. The scraper Action drops new or changed contacts here for approval before they enter cadence.</div></div>
           ) : (
             <>
-              <div style={{ fontSize: '12px', color: '#777', marginBottom: '14px' }}>{reviewContacts.length} contact{reviewContacts.length !== 1 ? 's' : ''} awaiting review — verify the person, title, and email, then approve or discard.</div>
-              {reviewContacts.map(c => {
+              <div style={{ fontSize: '12px', color: '#777', marginBottom: '12px', lineHeight: 1.6 }}>
+                {reviewContacts.length} awaiting review — decision-makers are sorted to the top. Approve the ED / MD / artistic staff / personnel manager per orchestra; most general board members can be discarded. Spot-check any <span style={pill('#bf9a4a')}>inferred</span> email before it's ever sent.
+              </div>
+
+              {/* filters */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input value={reviewSearch} onChange={e => setReviewSearch(e.target.value)} placeholder="Search name / orchestra…" style={{ ...inputStyle, width: '200px' }} />
+                <select value={reviewRole} onChange={e => setReviewRole(e.target.value)} style={{ ...selectStyle, width: 'auto' }}>
+                  <option value="All">All roles</option>
+                  {ROLES.map(r => <option key={r}>{r}</option>)}
+                </select>
+                <select value={reviewConf} onChange={e => setReviewConf(e.target.value)} style={{ ...selectStyle, width: 'auto' }}>
+                  <option value="All">Any email</option>
+                  {EMAIL_CONFIDENCE.map(c => <option key={c} value={c}>{c} email</option>)}
+                </select>
+                <span style={{ fontSize: '11px', color: '#555', marginLeft: 'auto' }}>{reviewFiltered.length} shown</span>
+              </div>
+
+              {/* bulk actions */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <button
+                  disabled={bulkBusy || !reviewFiltered.length}
+                  onClick={() => { if (confirm(`Approve all ${reviewFiltered.length} shown contact(s)?`)) approveMany(reviewFiltered.map(c => c.id)); }}
+                  style={{ ...btn('#6abf4a'), opacity: bulkBusy || !reviewFiltered.length ? 0.5 : 1 }}
+                >Approve all shown ({reviewFiltered.length})</button>
+                <button
+                  disabled={bulkBusy || !reviewFiltered.length}
+                  onClick={() => { if (confirm(`Discard all ${reviewFiltered.length} shown contact(s)? This deletes them.`)) discardMany(reviewFiltered.map(c => c.id)); }}
+                  style={{ ...btn('#7a3a3a'), opacity: bulkBusy || !reviewFiltered.length ? 0.5 : 1 }}
+                >Discard all shown</button>
+                {reviewBoardCount > 0 && (
+                  <button
+                    disabled={bulkBusy}
+                    onClick={() => { if (confirm(`Discard all ${reviewBoardCount} board member(s) across every orchestra? Keeps EDs, MDs, artistic staff, and personnel managers.`)) discardMany(reviewContacts.filter(c => c.roleCategory === 'Board Member').map(c => c.id)); }}
+                    style={{ ...btn('#8a5a3a'), opacity: bulkBusy ? 0.5 : 1 }}
+                  >Discard all board members ({reviewBoardCount})</button>
+                )}
+                {bulkBusy && <span style={{ fontSize: '11px', color: GOLD }}>Working…</span>}
+              </div>
+
+              {reviewFiltered.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#444', fontSize: '13px' }}>No contacts match these filters.</div>
+              ) : reviewFiltered.map(c => {
                 const o = orchById[c.orchestraId];
+                const isDecision = DECISION_ROLES.includes(c.roleCategory);
                 return (
-                  <div key={c.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(138,90,191,0.3)', borderRadius: '8px', marginBottom: '8px', padding: '12px 14px' }}>
+                  <div key={c.id} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${isDecision ? 'rgba(106,191,74,0.3)' : 'rgba(138,90,191,0.22)'}`, borderRadius: '8px', marginBottom: '8px', padding: '12px 14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                       <div>
-                        <div style={{ fontSize: '14px', fontWeight: 500 }}>{c.name || 'Unnamed'} <span style={{ fontSize: '12px', color: '#888', fontWeight: 400 }}>· {c.title || c.roleCategory} · {o?.name}</span></div>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>
+                          {c.name || 'Unnamed'}
+                          <span style={{ fontSize: '12px', color: '#888', fontWeight: 400 }}> · {c.title || c.roleCategory} · {o?.name}</span>
+                          {isDecision && <span style={{ ...pill('#6abf4a'), marginLeft: 8 }}>decision-maker</span>}
+                        </div>
                         <div style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>{c.email || '(no email)'} <span style={pill(c.emailConfidence === 'verified' ? '#6abf4a' : c.emailConfidence === 'inferred' ? '#bf9a4a' : '#666')}>{c.emailConfidence}</span></div>
                         {c.source && <div style={{ fontSize: '11px', color: '#666', marginTop: 4 }}>source: {c.source}</div>}
                       </div>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button onClick={() => saveContact({ ...c, reviewed: true })} style={btn('#6abf4a')}>Approve</button>
-                        <button onClick={() => removeContact(c.id)} style={btn('#7a3a3a')}>Discard</button>
+                        <button disabled={bulkBusy} onClick={() => saveContact({ ...c, reviewed: true })} style={btn('#6abf4a')}>Approve</button>
+                        <button disabled={bulkBusy} onClick={() => removeContact(c.id)} style={btn('#7a3a3a')}>Discard</button>
                       </div>
                     </div>
                   </div>

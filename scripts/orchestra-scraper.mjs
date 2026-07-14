@@ -100,7 +100,7 @@ async function gatherText(base) {
   return chunks.join('\n\n');
 }
 
-const EXTRACT_SYSTEM = `You extract professional staff and board contacts from an orchestra's public website text. Return ONLY people in upper-level roles that influence guest-conductor decisions: Executive Director, Music Director, Artistic Director, Artistic Administrator, VP of Artistic Planning, General Manager, Personnel/Orchestra Manager, and Board members/officers. Ignore development, marketing, education, and box-office staff unless clearly senior leadership.
+const EXTRACT_SYSTEM = `You extract professional staff and board contacts from an orchestra's public website text. Return ONLY people in upper-level roles that influence guest-conductor decisions: Executive Director, Music Director, Artistic Director, Artistic Administrator, VP of Artistic Planning, General Manager, and Personnel/Orchestra Manager. From the board, include ONLY officers — the Board Chair/President, Vice-Chair, Treasurer, and Secretary — and NOT general board or trustee members. Ignore development, marketing, education, and box-office staff unless clearly senior leadership.
 
 Respond with ONLY a JSON array (no prose, no code fence). Each item:
 {"name": "...", "title": "exact title as printed", "roleCategory": "Executive Director|Music Director|Artistic Director|Artistic Administrator|Personnel Manager|Board Member|Other", "email": "if explicitly printed, else null"}
